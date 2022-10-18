@@ -1,0 +1,21 @@
+version: "3.5"
+
+services:
+  adosia-market-cardano-node:
+    container_name: adosia-market-cardano-node
+    image: inputoutput/cardano-node:${ADOSIA_MARKET_CARDANO_NODE_VERSION}
+    environment:
+      - NETWORK=${ADOSIA_MARKET_NETWORK}
+      - CARDANO_NODE_SOCKET_PATH=/ipc/node.socket
+    volumes:
+      - node-db:/data/db
+      - node-ipc:/ipc
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200k"
+        max-file: "10"
+
+volumes:
+  node-db:
+  node-ipc:
