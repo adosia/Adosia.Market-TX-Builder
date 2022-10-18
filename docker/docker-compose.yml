@@ -10,6 +10,7 @@ services:
     volumes:
       - node-db:/data/db
       - node-ipc:/ipc
+      - ../scripts:/scripts
     logging:
       driver: "json-file"
       options:

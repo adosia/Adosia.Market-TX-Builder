@@ -28,7 +28,7 @@ cnode-shell:
 
 .PHONY: cnode-tip
 cnode-tip:
-	@docker exec -it adosia-market-cardano-node bash -c "cardano-cli query tip --testnet-magic 2"
+	@docker exec -it adosia-market-cardano-node bash -c "/scripts/query-tip.sh ${ADOSIA_MARKET_NETWORK}"
 
 .PHONY: stats
 stats:

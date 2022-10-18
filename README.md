@@ -13,7 +13,7 @@
 - Switch to repo dir `cd $HOME/Desktop/Adosia.Market-TX-Builder`
 - Copy `docker/.env.example` as `docker/.env`
 - Run `make buid` to build & start the containers
-- Application should be running locally at `http://localhost:8030`
+- Application should be running locally at `http://0.0.0.0:8030`
 
 ## Available Make Commands (Local Development)
 * `build` Rebuild all docker containers
