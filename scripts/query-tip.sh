@@ -8,12 +8,12 @@ case $1 in
     cardano-cli query tip
     ;;
 
-  preprod)
-    cardano-cli query tip --testnet-magic 1
-    ;;
-
   preview)
     cardano-cli query tip --testnet-magic 2
+    ;;
+
+  preprod)
+    cardano-cli query tip --testnet-magic 5
     ;;
 
 esac

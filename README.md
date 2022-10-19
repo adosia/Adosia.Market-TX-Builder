@@ -12,6 +12,7 @@
 - Clone repo `git clone git@github.com:adosia/Adosia.Market-TX-Builder.git`
 - Switch to repo dir `cd $HOME/Desktop/Adosia.Market-TX-Builder`
 - Copy `docker/.env.example` as `docker/.env`
+- Copy `application/.env.example` as `application/.env`
 - Run `make buid` to build & start the containers
 - Application should be running locally at `http://0.0.0.0:8030`
 
@@ -21,5 +22,7 @@
 * `down` Shutdown all docker containers
 * `status` View the status of all running containers
 * `logs` View the logs out of all running containers
-* `shell` Drop into an interactive shell inside _dripdropz-web_ container
+* `web-shell` Drop into an interactive shell inside _adosia-market-tx-builder-web_ container
+* `cnode-shell` Drop into an interactive shell inside _adosia-market-cardano-node_ container
 * `stats` View the resource usage of all running containers
+* `composer-install` Runs `composer install` inside _adosia-market-tx-builder-web_ container

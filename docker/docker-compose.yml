@@ -1,9 +1,12 @@
 version: "3.5"
 
 services:
+
+  # Cardano Node Service
   adosia-market-cardano-node:
     container_name: adosia-market-cardano-node
     image: inputoutput/cardano-node:${ADOSIA_MARKET_CARDANO_NODE_VERSION}
+    networks: [ adosia-market-tx-builder ]
     environment:
       - NETWORK=${ADOSIA_MARKET_NETWORK}
       - CARDANO_NODE_SOCKET_PATH=/ipc/node.socket
@@ -17,6 +20,24 @@ services:
         max-size: "200k"
         max-file: "10"
 
+  # Transaction Builder Web Service
+  adosia-market-tx-builder-web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: adosia-market-tx-builder-web
+    tty: true
+    networks: [ adosia-market-tx-builder ]
+    volumes:
+      - ../application:/home/adosiamarket_tx_builder/application
+      - node-ipc:/ipc
+    environment:
+      - CARDANO_NODE_SOCKET_PATH=/ipc/node.socket
+    ports: [ "8030:80" ]
+
 volumes:
   node-db:
   node-ipc:
+
+networks:
+  adosia-market-tx-builder:
