@@ -22,7 +22,6 @@
 * `down` Shutdown all docker containers
 * `status` View the status of all running containers
 * `logs` View the logs out of all running containers
-* `web-shell` Drop into an interactive shell inside _adosia-market-tx-builder-web_ container
-* `cnode-shell` Drop into an interactive shell inside _adosia-market-cardano-node_ container
+* `shell` Drop into an interactive shell inside _adosia-market-tx-builder-web_ container
 * `stats` View the resource usage of all running containers
 * `composer-install` Runs `composer install` inside _adosia-market-tx-builder-web_ container
