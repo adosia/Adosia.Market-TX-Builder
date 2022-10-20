@@ -15,6 +15,7 @@ services:
         CARDANO_NODE_BUILD: ${CARDANO_NODE_BUILD}
         CARDANO_NETWORK: ${CARDANO_NETWORK}
     container_name: adosia-market-tx-builder-web
+    user: "${CURRENT_UID}:${CURRENT_GID}"
     tty: true
     networks: [ adosia-market-tx-builder ]
     volumes:
@@ -22,7 +23,9 @@ services:
       - cardano-node-db:/home/${LINUX_USERNAME}/cardano-node/db
     environment:
       - CARDANO_NODE_SOCKET_PATH=/home/${LINUX_USERNAME}/cardano-node/db/node.socket
-    ports: [ "8030:80" ]
+    ports:
+      - "8030:80"
+      - "6000:6000"
 
 volumes:
   cardano-node-db:

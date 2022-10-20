@@ -12,7 +12,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 # Update base system
 RUN apt-get update && \
-    apt-get install --no-install-recommends -y wget curl nano sudo libzip-dev zip unzip
+    apt-get install --no-install-recommends -y wget curl nano sudo libzip-dev zip unzip netbase
 
 # Configure php & apache
 RUN cp /usr/local/etc/php/php.ini-production php.ini && \
@@ -30,10 +30,10 @@ RUN sudo apt-get -y purge && sudo apt-get -y clean && \
     sudo rm -rf /usr/bin/apt*
 
 # Create linux user
-RUN adduser --disabled-password --gecos '' ${LINUX_USERNAME} && \
-    echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers && \
-    adduser ${LINUX_USERNAME} --uid ${CURRENT_UID} --gid ${CURRENT_GID} sudo && \
-    chown -R ${LINUX_USERNAME}:${LINUX_USERNAME} /home/${LINUX_USERNAME}/.*
+RUN echo "${LINUX_USERNAME} ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers && \
+    groupadd -g ${CURRENT_GID} accounts && \
+    adduser --disabled-password --gecos '' ${LINUX_USERNAME} --uid ${CURRENT_UID} --gid ${CURRENT_GID} && \
+    usermod -aG sudo ${LINUX_USERNAME}
 
 # Install composer globally
 RUN php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" \
@@ -73,10 +73,11 @@ RUN wget -O ~/env https://github.com/cardano-community/guild-operators/raw/maste
     sed -i 's/#SOCKET="${CNODE_HOME}\/sockets\/node0.socket"/SOCKET="${HOME}\/cardano-node\/db\/node.socket"/g' ~/env
 
 # Install entrypoint script
-COPY /stubs/run.sh /home/${LINUX_USERNAME}/run.sh
+COPY /scripts/run.sh /home/${LINUX_USERNAME}/run.sh
 
 # Expose apache port
 EXPOSE 80
+EXPOSE 6000
 
 # Run Cardano node and Apache2
 CMD ${HOME}/run.sh

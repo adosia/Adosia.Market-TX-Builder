@@ -1,7 +1,5 @@
 #!/usr/bin/make
 
-# https://github.com/os11k/relay
-
 export COMPOSE_PROJECT_NAME=adosiamarket
 export COMPOSE_FILE=docker/docker-compose.yml
 
@@ -28,6 +26,11 @@ down:
 .PHONY: build
 build:
 	docker-compose build
+	$(MAKE) up
+
+.PHONY: rebuild
+rebuild:
+	docker-compose build --no-cache
 	$(MAKE) up
 
 .PHONY: status
