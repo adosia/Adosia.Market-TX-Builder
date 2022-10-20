@@ -12,7 +12,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 # Update base system
 RUN apt-get update && \
-    apt-get install --no-install-recommends -y wget curl nano sudo libzip-dev zip unzip netbase
+    apt-get install --no-install-recommends -y wget curl nano sudo libzip-dev zip unzip netbase iproute2 jq bc
 
 # Configure php & apache
 RUN cp /usr/local/etc/php/php.ini-production php.ini && \
@@ -67,10 +67,13 @@ RUN mkdir -p ~/cardano-node/config && \
 RUN wget -O ~/env https://github.com/cardano-community/guild-operators/raw/master/scripts/cnode-helper-scripts/env && \
     wget -O ~/gLiveView.sh https://github.com/cardano-community/guild-operators/raw/master/scripts/cnode-helper-scripts/gLiveView.sh && \
     chmod +x ~/gLiveView.sh && \
-    sed -i 's/CNODE_PORT=6000/CNODE_PORT=3001/g' ~/env && \
+    sed -i 's/#CNODEBIN="${HOME}\/.cabal\/bin\/cardano-node"/CNODEBIN="${HOME}\/cardano-node\/bin\/cardano-node"/g' ~/env && \
+    sed -i 's/#CCLI="${HOME}\/.cabal\/bin\/cardano-cli"/CCLI="${HOME}\/cardano-node\/bin\/cardano-cli"/g' ~/env && \
+    sed -i 's/#CNODE_PORT=6000/CNODE_PORT=6000/g' ~/env && \
     sed -i 's/#CNODE_HOME="\/opt\/cardano\/cnode"/CNODE_HOME="${HOME}\/cardano-node"/g' ~/env && \
     sed -i 's/#CONFIG="${CNODE_HOME}\/files\/config.json"/CONFIG="${HOME}\/cardano-node\/config\/config.json"/g' ~/env && \
-    sed -i 's/#SOCKET="${CNODE_HOME}\/sockets\/node0.socket"/SOCKET="${HOME}\/cardano-node\/db\/node.socket"/g' ~/env
+    sed -i 's/#SOCKET="${CNODE_HOME}\/sockets\/node0.socket"/SOCKET="${HOME}\/cardano-node\/db\/node.socket"/g' ~/env && \
+    sed -i 's/#TOPOLOGY="${CNODE_HOME}\/files\/topology.json"/TOPOLOGY="${CNODE_HOME}\/config\/topology.json"/g' ~/env
 
 # Install entrypoint script
 COPY /scripts/run.sh /home/${LINUX_USERNAME}/run.sh

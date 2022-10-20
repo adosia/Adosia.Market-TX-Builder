@@ -2,6 +2,8 @@
 
 set -m
 
+sudo chmod 777 -R ${HOME}/cardano-node/db &&
+
 ${HOME}/cardano-node/bin/cardano-node run \
   --topology ${HOME}/cardano-node/config/topology.json \
   --database-path ${HOME}/cardano-node/db \

@@ -28,11 +28,6 @@ build:
 	docker-compose build
 	$(MAKE) up
 
-.PHONY: rebuild
-rebuild:
-	docker-compose build --no-cache
-	$(MAKE) up
-
 .PHONY: status
 status:
 	docker-compose ps
@@ -52,3 +47,7 @@ logs:
 .PHONY: composer-install
 composer-install:
 	docker exec -it adosia-market-tx-builder-web bash -c "composer install"
+
+.PHONY: gLiveView
+gLiveView:
+	docker exec -it adosia-market-tx-builder-web bash -c "../gLiveView.sh"
