@@ -25,6 +25,7 @@ services:
     environment:
       - CARDANO_NODE_SOCKET_PATH=/home/${LINUX_USERNAME}/cardano-node-data/db/node.socket
       - LINUX_USERNAME=${LINUX_USERNAME}
+      - CARDANO_NETWORK=${CARDANO_NETWORK}
     ports:
       - "8030:80"
       - "6000:6000"
