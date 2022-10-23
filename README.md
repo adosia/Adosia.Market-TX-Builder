@@ -22,7 +22,8 @@
 * `make down` Shutdown all docker containers
 * `make status` View the status of all running containers
 * `make logs` View the logs out of all running containers
-* `make shell` Drop into an interactive shell inside _adosia-market-tx-builder-web_ container
+* `make web-shell` Drop into an interactive shell inside _adosia-market-tx-builder-web_ container
+* `make nodejs-shell` Drop into an interactive shell inside _adosia-market-tx-builder-nodejs_ container
 * `make stats` View the resource usage of all running containers
 * `make composer-install` Runs `composer install` inside _adosia-market-tx-builder-web_ container
 * `make gLiveView` Runs `gLiveView.sh` to view the status of cardano-node

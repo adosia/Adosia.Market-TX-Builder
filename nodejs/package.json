@@ -1,0 +1,13 @@
+{
+  "name": "tx-builder_nodejs",
+  "version": "1.0.0",
+  "description": "Mini api for processing CIP-008 requests",
+  "author": "Latheesan Kanesamoorthy <latheesan87@gmail.com>",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.16.1"
+  }
+}

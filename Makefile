@@ -32,13 +32,17 @@ build:
 status:
 	docker-compose ps
 
-.PHONY: shell
-shell:
+.PHONY: web-shell
+web-shell:
 	docker exec -it adosia-market-tx-builder-web bash
+
+.PHONY: nodejs-shell
+nodejs-shell:
+	docker exec -it adosia-market-tx-builder-nodejs bash
 
 .PHONY: stats
 stats:
-	docker stats adosia-market-tx-builder-web
+	docker stats adosia-market-tx-builder-web adosia-market-tx-builder-nodejs
 
 .PHONY: logs
 logs:

@@ -6,7 +6,7 @@ services:
   adosia-market-tx-builder-web:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/Web.Dockerfile
       args:
         LINUX_USERNAME: ${LINUX_USERNAME}
         CURRENT_UID: ${CURRENT_UID}
@@ -15,6 +15,7 @@ services:
         CARDANO_NODE_BUILD: ${CARDANO_NODE_BUILD}
         CARDANO_NETWORK: ${CARDANO_NETWORK}
     container_name: adosia-market-tx-builder-web
+    restart: unless-stopped
     user: "${CURRENT_UID}:${CURRENT_GID}"
     tty: true
     networks: [ adosia-market-tx-builder ]
@@ -26,6 +27,17 @@ services:
     ports:
       - "8030:80"
       - "6000:6000"
+
+  # Transaction Builder NodeJS Service
+  adosia-market-tx-builder-nodejs:
+    build:
+      context: ..
+      dockerfile: docker/NodeJS.Dockerfile
+    container_name: adosia-market-tx-builder-nodejs
+    restart: unless-stopped
+    user: "${CURRENT_UID}:${CURRENT_GID}"
+    tty: true
+    networks: [ adosia-market-tx-builder ]
 
 networks:
   adosia-market-tx-builder:
