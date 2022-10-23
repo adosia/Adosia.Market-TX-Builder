@@ -53,7 +53,8 @@ RUN mkdir -p ~/cardano-node/bin && \
     tar -xvf cardano-node-${CARDANO_NODE_VERSION}*.tar.gz && \
     cp cardano-node ~/cardano-node/bin/cardano-node && \
     cp cardano-cli ~/cardano-node/bin/cardano-cli && \
-    rm -rf ~/cnode-src
+    rm -rf ~/cnode-src && \
+    echo 'export PATH="$PATH:$HOME/cardano-node/bin"' >> ~/.bashrc
 
 # Download cardano node configurations
 RUN mkdir -p ~/cardano-node/config && \
