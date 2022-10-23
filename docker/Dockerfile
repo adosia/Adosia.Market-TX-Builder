@@ -72,15 +72,15 @@ RUN wget -O ~/env https://github.com/cardano-community/guild-operators/raw/maste
     sed -i 's/#CNODE_PORT=6000/CNODE_PORT=6000/g' ~/env && \
     sed -i 's/#CNODE_HOME="\/opt\/cardano\/cnode"/CNODE_HOME="${HOME}\/cardano-node"/g' ~/env && \
     sed -i 's/#CONFIG="${CNODE_HOME}\/files\/config.json"/CONFIG="${HOME}\/cardano-node\/config\/config.json"/g' ~/env && \
-    sed -i 's/#SOCKET="${CNODE_HOME}\/sockets\/node0.socket"/SOCKET="${HOME}\/cardano-node\/db\/node.socket"/g' ~/env && \
+    sed -i 's/#SOCKET="${CNODE_HOME}\/sockets\/node0.socket"/SOCKET="${HOME}\/cardano-node-data\/db\/node.socket"/g' ~/env && \
     sed -i 's/#TOPOLOGY="${CNODE_HOME}\/files\/topology.json"/TOPOLOGY="${CNODE_HOME}\/config\/topology.json"/g' ~/env
 
 # Install entrypoint script
-COPY /scripts/run.sh /home/${LINUX_USERNAME}/run.sh
+COPY /docker/entrypoint.sh /home/${LINUX_USERNAME}/entrypoint.sh
 
 # Expose apache port
 EXPOSE 80
 EXPOSE 6000
 
 # Run Cardano node and Apache2
-CMD ${HOME}/run.sh
+CMD ${HOME}/entrypoint.sh

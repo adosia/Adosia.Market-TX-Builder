@@ -20,15 +20,12 @@ services:
     networks: [ adosia-market-tx-builder ]
     volumes:
       - ../application:/home/${LINUX_USERNAME}/application
-      - cardano-node-db:/home/${LINUX_USERNAME}/cardano-node/db
+      - ../cardano-node-data:/home/${LINUX_USERNAME}/cardano-node-data
     environment:
-      - CARDANO_NODE_SOCKET_PATH=/home/${LINUX_USERNAME}/cardano-node/db/node.socket
+      - CARDANO_NODE_SOCKET_PATH=/home/${LINUX_USERNAME}/cardano-node-data/db/node.socket
     ports:
       - "8030:80"
       - "6000:6000"
-
-volumes:
-  cardano-node-db:
 
 networks:
   adosia-market-tx-builder:
