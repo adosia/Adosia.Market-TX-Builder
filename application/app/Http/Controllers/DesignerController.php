@@ -56,7 +56,7 @@ class DesignerController extends Controller
                 json_encode([
                     721 => [
                         'name' => $assetName,
-                        'image' => $request->thumnail,
+                        'image' => $request->thumbnail,
                         'glb_model' => $request->glb_model,
                         'stl_models' => $request->stl_models,
                     ]
