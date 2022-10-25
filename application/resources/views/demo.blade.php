@@ -15,7 +15,9 @@
     <div class="container-fluid">
 
         <h4 class="mb-3">1. Connect Wallet <a href="/demo" class="btn btn-primary btn-sm">Change Wallet</a></h4>
-        <div id="wallet-integration" class="d-flex justify-content-start align-items-center gap-3 mb-3"></div>
+        <div id="wallet-integration" class="d-flex justify-content-start align-items-center gap-3 mb-3">
+            Detecting wallets ... please wait
+        </div>
 
         <div id="demo-actions" style="display: none;">
             <h4 class="mb-3">2. Run Demo</h4>
@@ -29,9 +31,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.1/jquery.min.js" integrity="sha512-aVKKRRi/Q/YV+4mjoKBsE4x3H+BkegoM/em46NNlCqNTmUYADjBbeNefNxYV7giUp0VxICtqdrbqU7iVaeZNXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.2.2/js/bootstrap.bundle.min.js" integrity="sha512-BOsvKbLb0dB1IVplOL9ptU1EYA+LuCKEluZWRUYG73hxqNBU85JBIBhPGwhQl7O633KtkjMv8lvxZcWP+N3V3w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/11.6.2/sweetalert2.min.js" integrity="sha512-rK2AiUjuQZfFvsW3A2pKQSPepwN2KI1U3m+oNQsmsQQ5nutlUaKCv2+H1oJpVJjNuMklUmTQkoGaIVz5kpBzjA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@stricahq/cbors@1.0.2/dist/index.min.js"></script>
     <script type="text/javascript" src="https://cdn.dripdropz.io/wallet-connector/csl-v10.0.4/bundle.js"></script>
     <script type="module">
-        import * as CSL from 'https://cdn.dripdropz.io/wallet-connector/csl-v10.0.4/init.js';
+        import { C as CSL } from 'https://unpkg.com/lucid-cardano@0.6.9/web/mod.js';
         (async function ($) {
 
             const networkMode = {{ isTestnet() ? 0 : 1 }};
@@ -70,6 +73,74 @@
                 return Buffer.Buffer.from(hex, "hex");
             };
 
+            const toHex = (bytes) => {
+                return Buffer.Buffer.from(bytes).toString('hex');
+            };
+
+            const token = (amount, policyId, assetName) => {
+                return {
+                    pid: policyId,
+                    tkn: assetName,
+                    amt: parseInt(amount),
+                };
+            };
+
+            const utxoCborToJSON = (cborString) => {
+                let jsonObj = {}
+                const data = cbors.Decoder.decode(fromHex(cborString)).value;
+                const txInfo = data[0];
+                jsonObj.txId = toHex(txInfo[0]);
+                jsonObj.index = parseInt(txInfo[1]);
+                jsonObj.tokens = [];
+                const valueInfo = data[1];
+                if (typeof(valueInfo[1]) === 'number') {
+                    jsonObj.pkh = toHex(valueInfo[0]);
+                    jsonObj.minAda = parseInt(valueInfo[1]);
+                } else {
+                    jsonObj.pkh = toHex(valueInfo[0]);
+                    jsonObj.minAda = parseInt(valueInfo[1][0]);
+                    const allTokens = valueInfo[1][1];
+                    for (const [pid, token] of allTokens) {
+                        const thnPid = toHex(pid);
+                        for (const [tknItem, value] of token) {
+                            jsonObj.tokens.push({
+                                pid: thnPid,
+                                tkn: toHex(tknItem),
+                                amt: value,
+                            });
+                        }
+                    }
+                }
+                return jsonObj;
+            };
+
+            const getAllInputs = (utxosCborList) => {
+                let inputs = []
+                utxosCborList.forEach(utxo => {
+                    const data = utxoCborToJSON(utxo)
+                    let tokens = []
+                    data.tokens.forEach(tkn => {
+                        tokens.push(token(tkn.amt,tkn.pid,tkn.tkn));
+                    });
+                    inputs.push({
+                        utxo: data.txId + '#' +  data.index,
+                        lovelace: data.minAda,
+                        tokens,
+                    });
+                });
+                return inputs;
+            };
+
+            const getFundedUtxos = (allInputs) => {
+                let utxoList = [];
+                allInputs.forEach(input => {
+                    if (input.tokens.length === 0) {
+                        utxoList.push(input.utxo);
+                    }
+                });
+                return utxoList;
+            };
+
             const $walletIntegration = $('div#wallet-integration');
             const $demoActions = $('div#demo-actions');
 
@@ -91,6 +162,7 @@
                     let walletIntegrationTimer = setInterval(function () {
                         if (!window.cardano) return;
                         let loadedWalletCount = 0;
+                        $walletIntegration.html('');
                         supportedWallets.forEach(function (supportedWalletName) {
                             if (window.cardano[supportedWalletName] !== undefined) {
                                 $walletIntegration.append(`
@@ -122,8 +194,11 @@
                         if (window.connectedWallet === undefined) {
                             try {
                                 window.connectedWallet = await window.cardano[walletName].enable();
+                                if (window.connectedWallet === undefined) {
+                                    throw Error('Not Connected');
+                                }
                             } catch (err) {
-                                showToast('error', `Could not connect to <strong>${ supportedWalletNames[walletName] }</strong> wallet<br>${err}`);
+                                showToast('error', `Could not connect to <strong>${ supportedWalletNames[walletName] }</strong> wallet<hr>${ err.info || 'Wallet connection rejected by user' }`);
                                 enableConnectWallet();
                                 return;
                             }
@@ -142,13 +217,19 @@
                             return;
                         }
 
-                        showToast('success', `Connected to <strong>${ supportedWalletNames[walletName] }</strong> wallet`, 2000);
+                        showToast('success', `Connected to <strong>${ supportedWalletNames[walletName] }</strong> wallet`, 1500);
 
                         $demoActions.show();
 
                     });
 
                     $demoActions.on('click', 'button.designer-mint', async function () {
+
+                        const fundedUtxos = getFundedUtxos(getAllInputs(await window.connectedWallet.getUtxos()));
+                        if (fundedUtxos.length === 0) {
+                            showToast('error', 'Pure ada only utxo inputs exhausted, send 5 ada to yourself and try again');
+                            return;
+                        }
 
                         $('button.demo-action').addClass('disabled');
 
@@ -183,19 +264,56 @@
                                 "designer_pkh": designerPKH,
                                 "designer_stake_key": designerStakeKey,
                                 "designer_change_address": designerChangeAddress,
-                                "designer_input_tx_ids": [
-                                    // TODO: get all utxos -> find funded utxos
-                                    "c4f6f832d0948251778a2279fe4522fd8f2167ce5d10328ed169bed3fc96e98d#1",
-                                    "f7cfeca4a74e3e8d8d280c8e8262f54622cf0c23200c3934d6f936cb4dbe0ba7#1",
-                                    "561f3571bfa8b225443c9eb2c981aa43618ca2d816aaab67ab52b0516cc62298#1",
-                                    "45c89a87431b7310d33c195916068deb2039b233d8e99469f31b20fe9f98027c#1"
-                                ],
+                                "designer_input_tx_ids": fundedUtxos,
                                 "design_name_prefix": "SpaceRocket",
                             }),
                         };
 
-                        $.ajax(settings).done(function (response) {
-                            console.log(response);
+                        $.ajax(settings).done(async function (response) {
+                            if (response.data) {
+
+                                let encodedSignedTx = null;
+
+                                try {
+                                    const txCli = CSL.Transaction.from_bytes(fromHex(response.data));
+                                    const txBody = txCli.body();
+                                    const witnessSet = txCli.witness_set();
+                                    witnessSet.vkeys()?.free();
+                                    const changeAddressValue = await window.connectedWallet.getChangeAddress();
+                                    const changeAddress = CSL.Address.from_bytes(Uint8Array.from(fromHex(changeAddressValue)));
+                                    const walletAddress = CSL.BaseAddress.from_address(changeAddress);
+                                    const requiredSigners = CSL.Ed25519KeyHashes.new();
+                                    requiredSigners.add(walletAddress.payment_cred().to_keyhash());
+                                    txBody.set_required_signers(requiredSigners);
+                                    const tx = CSL.Transaction.new(txBody, witnessSet, undefined);
+                                    const encodedTx = toHex(tx.to_bytes());
+                                    const encodedTxVkeyWitnesses = await window.connectedWallet.signTx(encodedTx, true);
+                                    const txVkeyWitnesses = CSL.TransactionWitnessSet.from_bytes(fromHex(encodedTxVkeyWitnesses));
+                                    witnessSet.set_vkeys(txVkeyWitnesses.vkeys());
+                                    const txSigned = CSL.Transaction.new(tx.body(), witnessSet, undefined);
+                                    encodedSignedTx = toHex(txSigned.to_bytes());
+                                } catch (err) {
+                                    console.error('SignTX', err);
+                                    showToast('error', err.info || err);
+                                    return;
+                                }
+
+                                try {
+                                    const txHash = await window.connectedWallet.submitTx(encodedSignedTx);
+                                    showToast('success', `Transaction completed<hr>Tx Hash: <strong>${ txHash }</strong>`);
+                                } catch (err) {
+                                    console.log('encodedSignedTx', encodedSignedTx);
+                                    console.error('SubmitTX', err);
+                                    showToast('error', err.info || err);
+                                }
+
+                            } else {
+
+                                showToast('error', response.error.message || response.error);
+
+                            }
+                        }).catch(err => {
+                            console.log(err);
                         });
 
                     });
