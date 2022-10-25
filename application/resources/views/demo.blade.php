@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="Latheesan Kanesamoorthy">
+    <title>TX Builder Demo</title>
+    <link rel="canonical" href="https://getbootstrap.com/docs/5.2/examples/sign-in/">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.2.2/css/bootstrap.min.css" integrity="sha512-CpIKUSyh9QX2+zSdfGP+eWLx23C8Dj9/XmHjZY2uDtfkdLGo0uY12jgcnkX9vXOgYajEKb/jiw67EYm+kBf+6g==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/11.6.2/sweetalert2.min.css" integrity="sha512-5aabpGaXyIfdaHgByM7ZCtgSoqg51OAt8XWR2FHr/wZpTCea7ByokXbMX2WSvosioKvCfAGDQLlGDzuU6Nm37Q==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body class="p-3">
+
+    <div class="container-fluid">
+
+        <h4 class="mb-3">1. Connect Wallet <a href="/demo" class="btn btn-primary btn-sm">Change Wallet</a></h4>
+        <div id="wallet-integration" class="d-flex justify-content-start align-items-center gap-3 mb-3"></div>
+
+        <div id="demo-actions" style="display: none;">
+            <h4 class="mb-3">2. Run Demo</h4>
+            <button class="btn btn-primary demo-action designer-mint">
+                Designer: Mint &amp; Send to Marketplace
+            </button>
+        </div>
+
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.1/jquery.min.js" integrity="sha512-aVKKRRi/Q/YV+4mjoKBsE4x3H+BkegoM/em46NNlCqNTmUYADjBbeNefNxYV7giUp0VxICtqdrbqU7iVaeZNXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.2.2/js/bootstrap.bundle.min.js" integrity="sha512-BOsvKbLb0dB1IVplOL9ptU1EYA+LuCKEluZWRUYG73hxqNBU85JBIBhPGwhQl7O633KtkjMv8lvxZcWP+N3V3w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/11.6.2/sweetalert2.min.js" integrity="sha512-rK2AiUjuQZfFvsW3A2pKQSPepwN2KI1U3m+oNQsmsQQ5nutlUaKCv2+H1oJpVJjNuMklUmTQkoGaIVz5kpBzjA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script type="text/javascript" src="https://cdn.dripdropz.io/wallet-connector/csl-v10.0.4/bundle.js"></script>
+    <script type="module">
+        import * as CSL from 'https://cdn.dripdropz.io/wallet-connector/csl-v10.0.4/init.js';
+        (async function ($) {
+
+            const networkMode = {{ isTestnet() ? 0 : 1 }};
+            const targetNetwork = '{{ ucwords(env('CARDANO_NETWORK')) }}';
+
+            const supportedWallets = [
+                'eternl',
+                'flint',
+                'typhoncip30',
+                'gerowallet',
+                'LodeWallet',
+                'nufi',
+                'nami',
+            ];
+
+            const supportedWalletNames = {
+                eternl: 'Eternl',
+                flint: 'Flint',
+                typhoncip30: 'Typhon',
+                gerowallet: 'Gero',
+                LodeWallet: 'Lode',
+                nufi: 'NuFi',
+                nami: 'Nami',
+            };
+
+            window.Wallets = {};
+
+            const showToast = (type, message, timer = false) => Swal.fire({
+                icon: type,
+                html: message,
+                timer,
+                showConfirmButton: (timer === false),
+            });
+
+            const $walletIntegration = $('div#wallet-integration');
+            const $demoActions = $('div#demo-actions');
+
+            async function run() {
+                $(document).ready(async function () {
+
+                    const enableConnectWallet = () => {
+                        $('button.connect-wallet')
+                            .removeClass('disabled')
+                            .removeClass('btn-primary')
+                            .addClass('btn-outline-primary');
+                    };
+
+                    const disableConnectWallet = () => {
+                        $('button.connect-wallet')
+                            .addClass('disabled');
+                    };
+
+                    let walletIntegrationTimer = setInterval(function () {
+                        if (!window.cardano) return;
+                        let loadedWalletCount = 0;
+                        supportedWallets.forEach(function (supportedWalletName) {
+                            if (window.cardano[supportedWalletName] !== undefined) {
+                                $walletIntegration.append(`
+                                    <button data-wallet="${ supportedWalletName }" title="Connec ${ supportedWalletNames[supportedWalletName] } Wallet" class="connect-wallet btn btn-outline-primary">
+                                        <img width="32" height="32" src="${ window.cardano[supportedWalletName].icon }" alt="">
+                                    </button>
+                                `);
+                                loadedWalletCount++;
+                            }
+                        });
+                        if (loadedWalletCount === 0) {
+                            $walletIntegration.html('Cardano Lite Wallets Not Detected');
+                        }
+                        clearInterval(walletIntegrationTimer);
+                    }, 500);
+
+                    $walletIntegration.on('click', 'button.connect-wallet', async function () {
+
+                        $(this).removeClass('btn-outline-primary').addClass('btn-primary');
+
+                        const walletName = $(this).data('wallet');
+                        if (!walletName || window.cardano[walletName] === undefined) {
+                            showToast('error', 'Invalid connect wallet request');
+                            return;
+                        }
+
+                        disableConnectWallet();
+
+                        if (window.Wallets[walletName] === undefined) {
+                            try {
+                                window.Wallets[walletName] = await window.cardano[walletName].enable();
+                            } catch (err) {
+                                showToast('error', `Could not connect to <strong>${ supportedWalletNames[walletName] }</strong> wallet<br>${err}`);
+                                enableConnectWallet();
+                                return;
+                            }
+                        }
+
+                        const wallet = window.Wallets[walletName];
+
+                        if (wallet.getNetworkId === undefined) {
+                            showToast('error', 'Could not determine cardano network or wallet not connected');
+                            enableConnectWallet();
+                            return;
+                        }
+
+                        const walletNetwork = await wallet.getNetworkId();
+                        if (walletNetwork !== networkMode) {
+                            showToast('error', `Wrong cardano network<br>Please switch to <strong>${ targetNetwork }</strong> network`);
+                            enableConnectWallet();
+                            return;
+                        }
+
+                        showToast('success', `Connected to <strong>${ supportedWalletNames[walletName] }</strong> wallet`, 2000);
+
+                        $demoActions.show();
+
+                    });
+
+                    $demoActions.on('click', 'button.designer-mint', async function () {
+
+                        $('button.demo-action').addClass('disabled');
+
+                        const settings = {
+                            "url": "/mint/design",
+                            "method": "POST",
+                            "timeout": 0,
+                            "headers": {
+                                "Content-Type": "application/json"
+                            },
+                            "data": JSON.stringify({
+                                "thumbnail": "ipfs://QmQWG57Vpq2pPfuzBn2bS8UEj4M1GnCa5PpqSU6k5fyNQC",
+                                "glb_model": "ipfs://QmQTXTycfwuEfr4Lk6W1Za8UjzyQor2znwVKfd7Jy7DUaM",
+                                "stl_models": [
+                                    {
+                                        "model_source": "ifps://QmRyBaGYu1bbthdkHUA2YjyUK43uPtKcoVuF8NpFk2Z6tm",
+                                        "print_quantity": 2
+                                    },
+                                    {
+                                        "model_source": "ifps://QmZCX5tXTko3wzyttK63SNTMpgfoGLwzUj7i6hA6tEWfqy",
+                                        "print_quantity": 1
+                                    }
+                                ],
+                                "print_price_lovelace": 10000000,
+                                "designer_pkh": "f81595a5e215c4cc63ec82a0790e66c6b109033bc34e23c03cd756eb",
+                                "designer_stake_key": "57e3e14dcee6ba8f48b97044ca868b4ee017d04ecc792de386beab74",
+                                "designer_change_address": "addr_test1qrupt9d9ug2ufnrrajp2q7gwvmrtzzgr80p5ug7q8nt4d66hu0s5mnhxh2853wtsgn9gdz6wuqtaqnkv0yk78p474d6qudapqh",
+                                "designer_input_tx_ids": [
+                                    "c4f6f832d0948251778a2279fe4522fd8f2167ce5d10328ed169bed3fc96e98d#1",
+                                    "f7cfeca4a74e3e8d8d280c8e8262f54622cf0c23200c3934d6f936cb4dbe0ba7#1",
+                                    "561f3571bfa8b225443c9eb2c981aa43618ca2d816aaab67ab52b0516cc62298#1",
+                                    "45c89a87431b7310d33c195916068deb2039b233d8e99469f31b20fe9f98027c#1"
+                                ],
+                                "design_name_prefix": "SpaceRocket",
+                            }),
+                        };
+
+                        $.ajax(settings).done(function (response) {
+                            console.log(response);
+                        });
+
+                    });
+
+                });
+
+            }
+
+            await run();
+
+        })(jQuery);
+    </script>
+
+</body>
+</html>

@@ -94,19 +94,29 @@ function exportProtocolParams(string $tempDir): void {
     shellExec($command, __FUNCTION__, __FILE__, __LINE__);
 }
 
+function isTestnet(): bool {
+    return env('CARDANO_NETWORK') !== 'mainnet';
+}
+
+/**
+ * @return int
+ */
+function cardanoNetworkMagic(): int {
+    return match (env('CARDANO_NETWORK')) {
+        'mainnet' => 0,
+        'preview' => 2,
+        'preprod' => 5,
+        default => -1,
+    };
+}
+
 /**
  * @return string
  */
 function cardanoNetworkFlag(): string {
-    $cardanoNetwork = env('CARDANO_NETWORK');
-    $testnetMagicNo = match ($cardanoNetwork) {
-        'preview' => $testnetMagicNo = 2,
-        'preprod' => $testnetMagicNo = 5,
-        default => $testnetMagicNo = -1,
-    };
-    return $cardanoNetwork === 'mainnet'
+    return env('CARDANO_NETWORK') === 'mainnet'
         ? '--mainnet'
-        : '--testnet-magic ' . $testnetMagicNo;
+        : '--testnet-magic ' . cardanoNetworkMagic();
 }
 
 /**

@@ -125,6 +125,7 @@ class DesignerController extends Controller
                 '--metadata-json-file %s/metadata.json \\' . PHP_EOL .
                 '--required-signer-hash %s \\' . PHP_EOL .
                 '--required-signer-hash %s \\' . PHP_EOL .
+                '--cddl-format \\' . PHP_EOL .
                 '%s',
 
                 CARDANO_CLI,
@@ -145,10 +146,11 @@ class DesignerController extends Controller
             shellExec($mintCommand, __FUNCTION__, __FILE__, __LINE__);
 
             // Success
-            return $this->successResponse(file_get_contents(sprintf(
+            $draftTx = json_decode(file_get_contents(sprintf(
                 "%s/tx.draft",
                 $tempDir,
-            )));
+            )), true, 512, JSON_THROW_ON_ERROR);
+            return $this->successResponse($draftTx['cborHex']);
 
         } catch (Throwable $exception) {
 
