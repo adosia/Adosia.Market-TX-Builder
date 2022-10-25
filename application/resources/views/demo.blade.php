@@ -57,7 +57,7 @@
                 nami: 'Nami',
             };
 
-            window.Wallets = {};
+            window.connectedWallet = undefined;
 
             const showToast = (type, message, timer = false) => Swal.fire({
                 icon: type,
@@ -65,6 +65,10 @@
                 timer,
                 showConfirmButton: (timer === false),
             });
+
+            const fromHex = (hex) => {
+                return Buffer.Buffer.from(hex, "hex");
+            };
 
             const $walletIntegration = $('div#wallet-integration');
             const $demoActions = $('div#demo-actions');
@@ -115,9 +119,9 @@
 
                         disableConnectWallet();
 
-                        if (window.Wallets[walletName] === undefined) {
+                        if (window.connectedWallet === undefined) {
                             try {
-                                window.Wallets[walletName] = await window.cardano[walletName].enable();
+                                window.connectedWallet = await window.cardano[walletName].enable();
                             } catch (err) {
                                 showToast('error', `Could not connect to <strong>${ supportedWalletNames[walletName] }</strong> wallet<br>${err}`);
                                 enableConnectWallet();
@@ -125,15 +129,13 @@
                             }
                         }
 
-                        const wallet = window.Wallets[walletName];
-
-                        if (wallet.getNetworkId === undefined) {
+                        if (window.connectedWallet.getNetworkId === undefined) {
                             showToast('error', 'Could not determine cardano network or wallet not connected');
                             enableConnectWallet();
                             return;
                         }
 
-                        const walletNetwork = await wallet.getNetworkId();
+                        const walletNetwork = await window.connectedWallet.getNetworkId();
                         if (walletNetwork !== networkMode) {
                             showToast('error', `Wrong cardano network<br>Please switch to <strong>${ targetNetwork }</strong> network`);
                             enableConnectWallet();
@@ -149,6 +151,13 @@
                     $demoActions.on('click', 'button.designer-mint', async function () {
 
                         $('button.demo-action').addClass('disabled');
+
+                        const walletBasePKH = await window.connectedWallet.getChangeAddress();
+                        const designerPKH = walletBasePKH.slice(2, 58);
+                        const designerStakeKey = walletBasePKH.slice(58);
+                        const designerChangeAddress = CSL.Address.from_bytes(Uint8Array.from(fromHex(walletBasePKH))).to_bech32(
+                            'addr' + (networkMode === 0 ? '_test' : ''),
+                        );
 
                         const settings = {
                             "url": "/mint/design",
@@ -171,10 +180,11 @@
                                     }
                                 ],
                                 "print_price_lovelace": 10000000,
-                                "designer_pkh": "f81595a5e215c4cc63ec82a0790e66c6b109033bc34e23c03cd756eb",
-                                "designer_stake_key": "57e3e14dcee6ba8f48b97044ca868b4ee017d04ecc792de386beab74",
-                                "designer_change_address": "addr_test1qrupt9d9ug2ufnrrajp2q7gwvmrtzzgr80p5ug7q8nt4d66hu0s5mnhxh2853wtsgn9gdz6wuqtaqnkv0yk78p474d6qudapqh",
+                                "designer_pkh": designerPKH,
+                                "designer_stake_key": designerStakeKey,
+                                "designer_change_address": designerChangeAddress,
                                 "designer_input_tx_ids": [
+                                    // TODO: get all utxos -> find funded utxos
                                     "c4f6f832d0948251778a2279fe4522fd8f2167ce5d10328ed169bed3fc96e98d#1",
                                     "f7cfeca4a74e3e8d8d280c8e8262f54622cf0c23200c3934d6f936cb4dbe0ba7#1",
                                     "561f3571bfa8b225443c9eb2c981aa43618ca2d816aaab67ab52b0516cc62298#1",
