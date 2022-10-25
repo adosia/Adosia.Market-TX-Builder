@@ -80,7 +80,7 @@ class DesignerController extends Controller
                 bin2hex($assetName),
                 $tempDir,
             );
-            $minUTXO = shell_exec($minUTXOCommand);
+            $minUTXO = shellExec($minUTXOCommand, __FUNCTION__, __FILE__, __LINE__);
 
             // Generate input transaction ids
             $txIns = '';
@@ -109,7 +109,7 @@ class DesignerController extends Controller
                 CARDANO_CLI,
                 $tempDir
             );
-            $designerPolicyPKH = trim(shell_exec($designerPolicyPKHCommand));
+            $designerPolicyPKH = shellExec($designerPolicyPKHCommand, __FUNCTION__, __FILE__, __LINE__);
 
             // Build the command
             $mintCommand = sprintf(
@@ -142,7 +142,7 @@ class DesignerController extends Controller
                 $designerPolicyPKH,
                 cardanoNetworkFlag(),
             );
-            shell_exec($mintCommand);
+            shellExec($mintCommand, __FUNCTION__, __FILE__, __LINE__);
 
             // Success
             return $this->successResponse(file_get_contents(sprintf(
