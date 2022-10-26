@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\AppException;
 use Throwable;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Http;
 use App\Http\Traits\JsonResponseTrait;
 
 class DesignerController extends Controller
@@ -24,7 +26,7 @@ class DesignerController extends Controller
             exportProtocolParams($tempDir);
 
             // Build the asset name
-            $assetName = $request->design_name_prefix . toShortHash(random_bytes(128));
+            $assetName = $request->design_name_prefix; // . toShortHash(random_bytes(128));
 
             // Generate marketplace datum
             file_put_contents(
@@ -41,7 +43,7 @@ class DesignerController extends Controller
                         [ 'bytes' => bin2hex($request->design_name_prefix) ],
                         [ 'int' => $request->print_price_lovelace ],
                     ]
-                ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT),
+                ], JSON_THROW_ON_ERROR),
             );
 
             // Generate designer policy script
@@ -60,7 +62,7 @@ class DesignerController extends Controller
                         'glb_model' => $request->glb_model,
                         'stl_models' => $request->stl_models,
                     ]
-                ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT),
+                ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
             );
 
             // Calculate minUTXO
@@ -98,7 +100,7 @@ class DesignerController extends Controller
                 bin2hex($assetName),
             );
 
-            // Generate designer policy vkey pkh
+            // Generate designer policy vkey pkh & Write down the designer policy skey
             file_put_contents(
                 "$tempDir/designer_policy.vkey",
                 config('adosia.policies.designer.vkey'),
@@ -145,12 +147,27 @@ class DesignerController extends Controller
             );
             shellExec($mintCommand, __FUNCTION__, __FILE__, __LINE__);
 
-            // Success
+            // Read the draft tx
             $draftTx = json_decode(file_get_contents(sprintf(
                 "%s/tx.draft",
                 $tempDir,
             )), true, 512, JSON_THROW_ON_ERROR);
-            return $this->successResponse($draftTx['cborHex']);
+
+            // Witness the transaction
+            $designerPolicy = json_decode(config('adosia.policies.designer.skey'), true, 512, JSON_THROW_ON_ERROR);
+            $witnessResponse = Http::post('http://adosia-market-tx-builder-nodejs/designer/mint/witness-tx', [
+                'txBodyCbor' => $draftTx['cborHex'],
+                'policySkeyCbor' => $designerPolicy['cborHex'],
+            ]);
+            if (!$witnessResponse->successful() || empty($witnessResponse->body())) {
+                throw new AppException('Failed to witness transaction');
+            }
+
+            // Success
+            return $this->successResponse([
+                'transaction' => $draftTx['cborHex'],
+                'witness' => $witnessResponse->body(),
+            ]);
 
         } catch (Throwable $exception) {
 

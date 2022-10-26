@@ -275,22 +275,57 @@
                                 let encodedSignedTx = null;
 
                                 try {
-                                    const txCli = CSL.Transaction.from_bytes(fromHex(response.data));
+                                    const txCli = CSL.Transaction.from_bytes(fromHex(response.data.transaction));
                                     const txBody = txCli.body();
+                                    const txMetadata = txCli.auxiliary_data();
                                     const witnessSet = txCli.witness_set();
                                     witnessSet.vkeys()?.free();
-                                    const changeAddressValue = await window.connectedWallet.getChangeAddress();
-                                    const changeAddress = CSL.Address.from_bytes(Uint8Array.from(fromHex(changeAddressValue)));
-                                    const walletAddress = CSL.BaseAddress.from_address(changeAddress);
-                                    const requiredSigners = CSL.Ed25519KeyHashes.new();
-                                    requiredSigners.add(walletAddress.payment_cred().to_keyhash());
-                                    txBody.set_required_signers(requiredSigners);
-                                    const tx = CSL.Transaction.new(txBody, witnessSet, undefined);
+
+                                    const tx = CSL.Transaction.new(txBody, witnessSet, txMetadata);
                                     const encodedTx = toHex(tx.to_bytes());
                                     const encodedTxVkeyWitnesses = await window.connectedWallet.signTx(encodedTx, true);
-                                    const txVkeyWitnesses = CSL.TransactionWitnessSet.from_bytes(fromHex(encodedTxVkeyWitnesses));
-                                    witnessSet.set_vkeys(txVkeyWitnesses.vkeys());
-                                    const txSigned = CSL.Transaction.new(tx.body(), witnessSet, undefined);
+
+                                    const txWitnesses = tx.witness_set();
+                                    const txVkeys = txWitnesses.vkeys();
+                                    const txScripts = txWitnesses.native_scripts();
+                                    const totalVkeys = CSL.Vkeywitnesses.new();
+                                    const totalScripts = CSL.NativeScripts.new();
+
+                                    const witnesses = [
+                                        response.data.witness,
+                                        encodedTxVkeyWitnesses,
+                                    ];
+
+                                    for (let witness of witnesses) {
+                                        const addWitnesses = CSL.TransactionWitnessSet.from_bytes(
+                                            Buffer.Buffer.from(witness, "hex")
+                                        );
+                                        const addVkeys = addWitnesses.vkeys();
+                                        if (addVkeys) {
+                                            for (let i = 0; i < addVkeys.len(); i++) {
+                                                totalVkeys.add(addVkeys.get(i));
+                                            }
+                                        }
+                                    }
+
+                                    if (txVkeys) {
+                                        for (let i = 0; i < txVkeys.len(); i++) {
+                                            totalVkeys.add(txVkeys.get(i));
+                                        }
+                                    }
+
+                                    if (txScripts) {
+                                        for (let i = 0; i < txScripts.len(); i++) {
+                                            totalScripts.add(txScripts.get(i));
+                                        }
+                                    }
+
+                                    const totalWitnesses = CSL.TransactionWitnessSet.new();
+                                    totalWitnesses.set_vkeys(totalVkeys);
+                                    totalWitnesses.set_native_scripts(totalScripts);
+
+                                    const txSigned = CSL.Transaction.new(tx.body(), totalWitnesses, txMetadata);
+
                                     encodedSignedTx = toHex(txSigned.to_bytes());
                                 } catch (err) {
                                     console.error('SignTX', err);
@@ -313,6 +348,7 @@
 
                             }
                         }).catch(err => {
+                            showToast('error', 'Something went wrong, check developer console');
                             console.log(err);
                         });
 
