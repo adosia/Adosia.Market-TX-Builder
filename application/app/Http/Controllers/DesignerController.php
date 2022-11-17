@@ -2,11 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Exceptions\AppException;
 use Throwable;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Http;
 use App\Http\Traits\JsonResponseTrait;
 
 class DesignerController extends Controller
@@ -26,7 +24,7 @@ class DesignerController extends Controller
             exportProtocolParams($tempDir);
 
             // Build the asset name
-            $assetName = $request->design_name_prefix; // . toShortHash(random_bytes(128));
+            $assetName = substr($request->design_name_prefix, 0, 10) . toShortHash(random_bytes(128));
 
             // Generate marketplace datum
             file_put_contents(
@@ -36,11 +34,10 @@ class DesignerController extends Controller
                     'fields' => [
                         [ 'bytes' => $request->designer_pkh ],
                         [ 'bytes' => $request->designer_stake_key ],
-                        [ 'bytes' => config('adosia.policies.designer.policy_id') ],
                         [ 'bytes' => bin2hex($assetName) ],
                         [ 'int' => 0 ],
                         [ 'bytes' => config('adosia.policies.purchase_order.policy_id') ],
-                        [ 'bytes' => bin2hex($request->design_name_prefix) ],
+                        [ 'bytes' => bin2hex($assetName . '_') ],
                         [ 'int' => $request->print_price_lovelace ],
                     ]
                 ], JSON_THROW_ON_ERROR),
@@ -127,7 +124,6 @@ class DesignerController extends Controller
                 '--metadata-json-file %s/metadata.json \\' . PHP_EOL .
                 '--required-signer-hash %s \\' . PHP_EOL .
                 '--required-signer-hash %s \\' . PHP_EOL .
-                '--cddl-format \\' . PHP_EOL .
                 '%s',
 
                 CARDANO_CLI,
@@ -153,20 +149,9 @@ class DesignerController extends Controller
                 $tempDir,
             )), true, 512, JSON_THROW_ON_ERROR);
 
-            // Witness the transaction
-            $designerPolicy = json_decode(config('adosia.policies.designer.skey'), true, 512, JSON_THROW_ON_ERROR);
-            $witnessResponse = Http::post('http://adosia-market-tx-builder-nodejs/designer/mint/witness-tx', [
-                'txBodyCbor' => $draftTx['cborHex'],
-                'policySkeyCbor' => $designerPolicy['cborHex'],
-            ]);
-            if (!$witnessResponse->successful() || empty($witnessResponse->body())) {
-                throw new AppException('Failed to witness transaction');
-            }
-
             // Success
             return $this->successResponse([
                 'transaction' => $draftTx['cborHex'],
-                'witness' => $witnessResponse->body(),
             ]);
 
         } catch (Throwable $exception) {
@@ -181,4 +166,117 @@ class DesignerController extends Controller
 
         }
     }
+
+    public function mintDesignAssemble(Request $request): JsonResponse
+    {
+        $tempDir = null;
+
+        try {
+
+            // Initialise temp directory
+            $tempDir = createTempDir(__FUNCTION__);
+
+            // Export designer policy skey
+            file_put_contents(
+                "$tempDir/designer_mint_policy.skey",
+                config('adosia.policies.designer.skey'),
+            );
+
+            // Write the tx.draft
+            file_put_contents(
+                sprintf('%s/tx.draft', $tempDir),
+                json_encode([
+                    'type' => TX_DRAFT_TYPE,
+                    'description' => TX_DRAFT_DESCRIPTION,
+                    'cborHex' => $request->transactionCbor,
+                ], JSON_THROW_ON_ERROR),
+            );
+
+            // Write the wallet witness
+            $walletTxVkeyWitnesses = $request->walletTxVkeyWitnesses;
+            if (str_starts_with($walletTxVkeyWitnesses, 'a10081')) {
+                $walletTxVkeyWitnesses = substr($walletTxVkeyWitnesses, 6, strlen($walletTxVkeyWitnesses));
+            }
+            file_put_contents(
+                sprintf('%s/wallet.witness', $tempDir),
+                json_encode([
+                    'type' => TX_WITNESS_TYPE,
+                    'description' => TX_WITNESS_DESCRIPTION,
+                    'cborHex' => $walletTxVkeyWitnesses,
+                ], JSON_THROW_ON_ERROR),
+            );
+
+            // Witness the tx by policy skey
+            $witnessByPolicyCommand = sprintf(
+                '%s transaction witness \\' . PHP_EOL .
+                '--tx-body-file %s/tx.draft \\' . PHP_EOL .
+                '--signing-key-file %s/designer_mint_policy.skey \\' . PHP_EOL .
+                '--out-file %s/tx.witness \\' . PHP_EOL .
+                '%s',
+
+                CARDANO_CLI,
+                $tempDir,
+                $tempDir,
+                $tempDir,
+                cardanoNetworkFlag(),
+            );
+            shellExec($witnessByPolicyCommand, __FUNCTION__, __FILE__, __LINE__);
+
+            // Assemble the transaction
+            $assembleTxCommand = sprintf(
+                '%s transaction assemble \\' . PHP_EOL .
+                '--tx-body-file %s/tx.draft \\' . PHP_EOL .
+                '--witness-file %s/tx.witness \\' . PHP_EOL .
+                '--witness-file %s/wallet.witness \\' . PHP_EOL .
+                '--out-file %s/tx.signed',
+
+                CARDANO_CLI,
+                $tempDir,
+                $tempDir,
+                $tempDir,
+                $tempDir,
+            );
+            shellExec($assembleTxCommand, __FUNCTION__, __FILE__, __LINE__);
+
+            // Generate transaction id
+            $generateTxIdCommand = sprintf(
+                '%s transaction txid \\' . PHP_EOL .
+                '--tx-file %s/tx.signed',
+
+                CARDANO_CLI,
+                $tempDir,
+            );
+            $txId = shellExec($generateTxIdCommand, __FUNCTION__, __FILE__, __LINE__);
+
+            // Submit the transaction
+            $submitTxCommand = sprintf(
+                '%s transaction submit \\' . PHP_EOL .
+                '--tx-file %s/tx.signed \\' . PHP_EOL .
+                '%s',
+
+                CARDANO_CLI,
+                $tempDir,
+                cardanoNetworkFlag(),
+            );
+            $txStatus = shellExec($submitTxCommand, __FUNCTION__, __FILE__, __LINE__);
+
+            // Debug
+            return $this->successResponse([
+                'txId' => $txId,
+                'txStatus' => $txStatus,
+            ]);
+
+        } catch (Throwable $exception) {
+
+            return $this->jsonException($exception);
+
+        } finally {
+
+            if ($tempDir) {
+                rrmdir($tempDir);
+            }
+
+        }
+    }
+
 }

@@ -272,75 +272,17 @@
                         $.ajax(settings).done(async function (response) {
                             if (response.data) {
 
-                                let encodedSignedTx = null;
-
+                                let walletTxVkeyWitnesses = null;
                                 try {
-                                    const txCli = CSL.Transaction.from_bytes(fromHex(response.data.transaction));
-                                    const txBody = txCli.body();
-                                    const txMetadata = txCli.auxiliary_data();
-                                    const witnessSet = txCli.witness_set();
-                                    witnessSet.vkeys()?.free();
-
-                                    const tx = CSL.Transaction.new(txBody, witnessSet, txMetadata);
-                                    const encodedTx = toHex(tx.to_bytes());
-                                    const encodedTxVkeyWitnesses = await window.connectedWallet.signTx(encodedTx, true);
-
-                                    const txWitnesses = tx.witness_set();
-                                    const txVkeys = txWitnesses.vkeys();
-                                    const txScripts = txWitnesses.native_scripts();
-                                    const totalVkeys = CSL.Vkeywitnesses.new();
-                                    const totalScripts = CSL.NativeScripts.new();
-
-                                    const witnesses = [
-                                        response.data.witness,
-                                        encodedTxVkeyWitnesses,
-                                    ];
-
-                                    for (let witness of witnesses) {
-                                        const addWitnesses = CSL.TransactionWitnessSet.from_bytes(
-                                            Buffer.Buffer.from(witness, "hex")
-                                        );
-                                        const addVkeys = addWitnesses.vkeys();
-                                        if (addVkeys) {
-                                            for (let i = 0; i < addVkeys.len(); i++) {
-                                                totalVkeys.add(addVkeys.get(i));
-                                            }
-                                        }
-                                    }
-
-                                    if (txVkeys) {
-                                        for (let i = 0; i < txVkeys.len(); i++) {
-                                            totalVkeys.add(txVkeys.get(i));
-                                        }
-                                    }
-
-                                    if (txScripts) {
-                                        for (let i = 0; i < txScripts.len(); i++) {
-                                            totalScripts.add(txScripts.get(i));
-                                        }
-                                    }
-
-                                    const totalWitnesses = CSL.TransactionWitnessSet.new();
-                                    totalWitnesses.set_vkeys(totalVkeys);
-                                    totalWitnesses.set_native_scripts(totalScripts);
-
-                                    const txSigned = CSL.Transaction.new(tx.body(), totalWitnesses, txMetadata);
-
-                                    encodedSignedTx = toHex(txSigned.to_bytes());
+                                    walletTxVkeyWitnesses = await window.connectedWallet.signTx(response.data.transaction, true);
                                 } catch (err) {
                                     console.error('SignTX', err);
                                     showToast('error', err.info || err);
                                     return;
                                 }
 
-                                try {
-                                    const txHash = await window.connectedWallet.submitTx(encodedSignedTx);
-                                    showToast('success', `Transaction completed<hr>Tx Hash: <strong>${ txHash }</strong>`);
-                                } catch (err) {
-                                    console.log('encodedSignedTx', encodedSignedTx);
-                                    console.error('SubmitTX', err);
-                                    showToast('error', err.info || err);
-                                }
+                                console.log('transactionCbor', response.data.transaction);
+                                console.log('walletTxVkeyWitnesses', walletTxVkeyWitnesses);
 
                             } else {
 
@@ -355,7 +297,6 @@
                     });
 
                 });
-
             }
 
             await run();

@@ -9,7 +9,6 @@ return [
             'reference_tx_id' => env('MARKETPLACE_CONTRACT_REFERENCE_TX_ID')
         ],
         'invoice' => [
-            'script_address' => env('INVOICE_CONTRACT_SCRIPT_ADDRESS'),
             'reference_tx_id' => env('INVOICE_CONTRACT_REFERENCE_TX_ID'),
         ],
         'printing_pool' => [
