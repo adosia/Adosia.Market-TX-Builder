@@ -34,7 +34,7 @@
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@stricahq/cbors@1.0.2/dist/index.min.js"></script>
     <script type="text/javascript" src="https://cdn.dripdropz.io/wallet-connector/csl-v10.0.4/bundle.js"></script>
     <script type="module">
-        import { C as CSL } from 'https://unpkg.com/lucid-cardano@0.6.9/web/mod.js';
+        import { C as CSL } from 'https://unpkg.com/lucid-cardano@0.7.9/web/mod.js';
         (async function ($) {
 
             const networkMode = {{ isTestnet() ? 0 : 1 }};
@@ -225,6 +225,15 @@
 
                     $demoActions.on('click', 'button.designer-mint', async function () {
 
+                        const getCollateral = window.connectedWallet.experimental.getCollateral || window.connectedWallet.getCollateral;
+                        const collateralCBOR = await getCollateral();
+                        if (collateralCBOR.length === 0) {
+                            showToast('error', `Please configure <strong>Collateral<strong> in your <strong>${ supportedWalletNames[walletName] }</strong> wallet`);
+                            return;
+                        }
+                        const collateralUtxo = utxoCborToJSON(collateralCBOR[0]);
+                        const designerCollateral = `${ collateralUtxo.txId }#${ collateralUtxo.index }`;
+
                         const fundedUtxos = getFundedUtxos(getAllInputs(await window.connectedWallet.getUtxos()));
                         if (fundedUtxos.length === 0) {
                             showToast('error', 'Pure ada only utxo inputs exhausted, send 5 ada to yourself and try again');
@@ -248,41 +257,64 @@
                                 "Content-Type": "application/json"
                             },
                             "data": JSON.stringify({
-                                "thumbnail": "ipfs://QmQWG57Vpq2pPfuzBn2bS8UEj4M1GnCa5PpqSU6k5fyNQC",
+                                "name": "Space Rocket",
+                                "image": "ipfs://QmQWG57Vpq2pPfuzBn2bS8UEj4M1GnCa5PpqSU6k5fyNQC",
                                 "glb_model": "ipfs://QmQTXTycfwuEfr4Lk6W1Za8UjzyQor2znwVKfd7Jy7DUaM",
                                 "stl_models": [
                                     {
-                                        "model_source": "ifps://QmRyBaGYu1bbthdkHUA2YjyUK43uPtKcoVuF8NpFk2Z6tm",
-                                        "print_quantity": 2
+                                        "qty": 2,
+                                        "src": "ifps://QmRyBaGYu1bbthdkHUA2YjyUK43uPtKcoVuF8NpFk2Z6tm",
                                     },
                                     {
-                                        "model_source": "ifps://QmZCX5tXTko3wzyttK63SNTMpgfoGLwzUj7i6hA6tEWfqy",
-                                        "print_quantity": 1
-                                    }
+                                        "qty": 1,
+                                        "src": "ifps://QmZCX5tXTko3wzyttK63SNTMpgfoGLwzUj7i6hA6tEWfqy",
+                                    },
                                 ],
                                 "print_price_lovelace": 10000000,
                                 "designer_pkh": designerPKH,
                                 "designer_stake_key": designerStakeKey,
                                 "designer_change_address": designerChangeAddress,
                                 "designer_input_tx_ids": fundedUtxos,
-                                "design_name_prefix": "SpaceRocket",
+                                "designer_collateral": designerCollateral,
                             }),
                         };
 
                         $.ajax(settings).done(async function (response) {
                             if (response.data) {
 
-                                let walletTxVkeyWitnesses = null;
-                                try {
-                                    walletTxVkeyWitnesses = await window.connectedWallet.signTx(response.data.transaction, true);
-                                } catch (err) {
-                                    console.error('SignTX', err);
-                                    showToast('error', err.info || err);
-                                    return;
-                                }
+                                const tx = CSL.Transaction.from_bytes(fromHex(response.data.transaction));
+                                const txWitness = tx.witness_set();
+                                const txMetadata = tx.auxiliary_data();
 
-                                console.log('transactionCbor', response.data.transaction);
-                                console.log('walletTxVkeyWitnesses', walletTxVkeyWitnesses);
+                                // console.log(txMetadata.to_json());
+                                // console.log(toHex(txMetadata.to_bytes()));
+
+                                const txVkeyWitnesses = await window.connectedWallet.signTx(response.data.transaction, true);
+                                const witnesses = CSL.TransactionWitnessSet.from_bytes(fromHex(txVkeyWitnesses));
+
+                                // //const transactionWitnessSet = CSL.TransactionWitnessSet.new();
+                                // const txVkeys = txWitness.vkeys();
+                                // for (let i = 0; witnesses.vkeys().len(); i++) {
+                                //     txVkeys.add(witnesses.vkeys().get(i))
+                                // }
+                                // //transactionWitnessSet.set_vkeys(txVkeys);
+                                // txWitness.set_vkeys(txVkeys);
+
+                                const transactionWitnessSet = CSL.TransactionWitnessSet.new();
+                                transactionWitnessSet.set_vkeys(witnesses.vkeys());
+                                transactionWitnessSet.set_redeemers(txWitness.redeemers());
+
+                                const signedTx = CSL.Transaction.new(
+                                    tx.body(),
+                                    transactionWitnessSet,
+                                    // txMetadata,
+                                );
+
+                                console.log(toHex(signedTx.to_bytes()));
+
+                                const txId = await window.connectedWallet.submitTx(toHex(signedTx.to_bytes()));
+
+                                showToast('success', `Transaction ID is <strong>${ txId }</strong>`);
 
                             } else {
 

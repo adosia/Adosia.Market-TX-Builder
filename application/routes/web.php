@@ -10,5 +10,4 @@ $router->post('/mint/design-assemble', 'DesignerController@mintDesignAssemble');
 
 if (count(array_intersect(['local', 'staging'], [$router->app->environment()]))) {
     $router->get('demo', function () { return view('demo'); });
-    $router->get('test', function () { return view('test'); });
 }

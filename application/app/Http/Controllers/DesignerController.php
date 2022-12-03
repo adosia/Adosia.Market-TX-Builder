@@ -23,9 +23,6 @@ class DesignerController extends Controller
             // Export protocol parameters
             exportProtocolParams($tempDir);
 
-            // Build the asset name
-            $assetName = substr($request->design_name_prefix, 0, 10) . toShortHash(random_bytes(128));
-
             // Generate marketplace datum
             file_put_contents(
                 "$tempDir/marketplace_datum.json",
@@ -34,33 +31,63 @@ class DesignerController extends Controller
                     'fields' => [
                         [ 'bytes' => $request->designer_pkh ],
                         [ 'bytes' => $request->designer_stake_key ],
-                        [ 'bytes' => bin2hex($assetName) ],
+                        [ 'bytes' => bin2hex(env('DESIGN_PREFIX')) ],
                         [ 'int' => 0 ],
-                        [ 'bytes' => config('adosia.policies.purchase_order.policy_id') ],
-                        [ 'bytes' => bin2hex($assetName . '_') ],
+                        [ 'bytes' => env('PURCHASE_ORDER_POLICY_ID') ],
                         [ 'int' => $request->print_price_lovelace ],
                     ]
                 ], JSON_THROW_ON_ERROR),
             );
 
-            // Generate designer policy script
+            // Generate mint redeemer
             file_put_contents(
-                "$tempDir/mint_policy.script",
-                config('adosia.policies.designer.script'),
+                "$tempDir/mint_redeemer.json",
+                json_encode([
+                    'constructor' => 0,
+                    'fields' => [],
+                ], JSON_THROW_ON_ERROR),
             );
 
             // Generate metadata json
             file_put_contents(
                 "$tempDir/metadata.json",
                 json_encode([
-                    721 => [
-                        'name' => $assetName,
-                        'image' => $request->thumbnail,
+                    "721" => [
+                        'name' => substr($request->name, 0, 64),
+                        'image' => $request->image,
                         'glb_model' => $request->glb_model,
                         'stl_models' => $request->stl_models,
                     ]
                 ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
             );
+
+            // Parse inline datum of design contract
+            $parseDesignContractInlineDatumCommand = sprintf(
+                '%s query utxo \\' . PHP_EOL .
+                '--address %s \\' . PHP_EOL .
+                '--out-file %s/design_datum.json \\' . PHP_EOL .
+                '%s',
+
+                CARDANO_CLI,
+                env('DESIGN_CONTRACT_SCRIPT_ADDRESS'),
+                $tempDir,
+                cardanoNetworkFlag(),
+            );
+            shellExec($parseDesignContractInlineDatumCommand, __FUNCTION__, __FILE__, __LINE__);
+            $deignContractInlineDatum = json_decode(file_get_contents(sprintf('%s/design_datum.json', $tempDir)), true, 512, JSON_THROW_ON_ERROR);
+
+            // Parse script info
+            $scriptTxIn = null;
+            $currentDesignNumber = null;
+            $designReturnMinUTXO = null;
+            foreach ($deignContractInlineDatum as $utxo => $utxoData) {
+                if (isset($utxoData['value'][env('DESIGN_STARTER_POLICY_ID')][env('DESIGN_STARTER_ASSET_ID')])) {
+                    $scriptTxIn = $utxo;
+                    $currentDesignNumber = (int) $utxoData['inlineDatum']['fields'][1]['int'];
+                    $designReturnMinUTXO = (int) $utxoData['value']['lovelace'];
+                }
+            }
+            $nextDesignNumber = ($currentDesignNumber + 1);
 
             // Calculate minUTXO
             $minUTXOCommand = sprintf(
@@ -74,12 +101,12 @@ class DesignerController extends Controller
                 CARDANO_CLI,
                 NETWORK_ERA,
                 $tempDir,
-                config('adosia.contracts.marketplace.script_address'),
-                config('adosia.policies.designer.policy_id'),
-                bin2hex($assetName),
+                env('MARKETPLACE_CONTRACT_SCRIPT_ADDRESS'),
+                env('DESIGN_POLICY_ID'),
+                bin2hex(env('DESIGN_PREFIX') . $currentDesignNumber),
                 $tempDir,
             );
-            $minUTXO = shellExec($minUTXOCommand, __FUNCTION__, __FILE__, __LINE__);
+            $designMinUTXO = shellExec($minUTXOCommand, __FUNCTION__, __FILE__, __LINE__);
 
             // Generate input transaction ids
             $txIns = '';
@@ -87,61 +114,92 @@ class DesignerController extends Controller
                 $txIns .= '--tx-in ' . $txId . ' \\' . PHP_EOL;
             }
 
-            // Generate script output
-            $scriptOutput = sprintf(
+            // Generate starter nft return output
+            $returnStarterNFT = sprintf(
                 '%s + %d + 1 %s.%s',
 
-                config('adosia.contracts.marketplace.script_address'),
-                $minUTXO,
-                config('adosia.policies.designer.policy_id'),
-                bin2hex($assetName),
+                env('DESIGN_CONTRACT_SCRIPT_ADDRESS'),
+                $designReturnMinUTXO,
+                env('DESIGN_STARTER_POLICY_ID'),
+                env('DESIGN_STARTER_ASSET_ID'),
             );
 
-            // Generate designer policy vkey pkh & Write down the designer policy skey
+            // Generate design nft output
+            $designNFTNameOutput = sprintf(
+                '1 %s.%s',
+
+                env('DESIGN_POLICY_ID'),
+                bin2hex(env('DESIGN_PREFIX') . $currentDesignNumber),
+            );
+            $designNFTMarketplaceOutput = sprintf(
+                '%s + %d + %s',
+
+                env('MARKETPLACE_CONTRACT_SCRIPT_ADDRESS'),
+                $designMinUTXO,
+                $designNFTNameOutput,
+            );
+
+            // Generate marketplace datum
             file_put_contents(
-                "$tempDir/designer_policy.vkey",
-                config('adosia.policies.designer.vkey'),
+                "$tempDir/token_design_datum.json",
+                json_encode([
+                    'constructor' => 0,
+                    'fields' => [
+                        [ 'bytes' => env('DESIGN_POLICY_ID') ],
+                        [ 'int' => $nextDesignNumber ],
+                        [ 'bytes' => bin2hex(env('DESIGN_PREFIX')) ],
+                    ]
+                ], JSON_THROW_ON_ERROR),
             );
-            $designerPolicyPKHCommand = sprintf(
-                '%s address key-hash --payment-verification-key-file %s/designer_policy.vkey',
 
-                CARDANO_CLI,
-                $tempDir
-            );
-            $designerPolicyPKH = shellExec($designerPolicyPKHCommand, __FUNCTION__, __FILE__, __LINE__);
-
-            // Build the command
-            $mintCommand = sprintf(
+            // Build mint & lock command
+            $mintAndLockCommand = sprintf(
                 '%s transaction build \\' . PHP_EOL .
                 '%s \\' . PHP_EOL .
+                '--protocol-params-file %s/protocol.json \\' . PHP_EOL .
                 '--out-file %s/tx.draft \\' . PHP_EOL .
                 '--change-address %s \\' . PHP_EOL .
+                '--tx-in-collateral="%s" \\' . PHP_EOL .
                 '%s' .
+                '--tx-in %s \\' . PHP_EOL .
+                '--spending-tx-in-reference="%s" \\' . PHP_EOL .
+                '--spending-plutus-script-v2 \\' . PHP_EOL .
+                '--spending-reference-tx-in-inline-datum-present \\' . PHP_EOL .
+                '--spending-reference-tx-in-redeemer-file %s/mint_redeemer.json \\' . PHP_EOL .
+                '--tx-out="%s" \\' . PHP_EOL .
+                '--tx-out-inline-datum-file %s/token_design_datum.json \\' . PHP_EOL .
                 '--tx-out="%s" \\' . PHP_EOL .
                 '--tx-out-inline-datum-file %s/marketplace_datum.json \\' . PHP_EOL .
-                '--mint-script-file %s/mint_policy.script \\' . PHP_EOL .
-                '--mint="1 %s.%s" \\' . PHP_EOL .
-                '--metadata-json-file %s/metadata.json \\' . PHP_EOL .
-                '--required-signer-hash %s \\' . PHP_EOL .
-                '--required-signer-hash %s \\' . PHP_EOL .
+                '--mint="%s" \\' . PHP_EOL .
+                '--mint-tx-in-reference="%s" \\' . PHP_EOL .
+                '--mint-plutus-script-v2 \\' . PHP_EOL .
+                '--policy-id="%s" \\' . PHP_EOL .
+                '--mint-reference-tx-in-redeemer-file %s/mint_redeemer.json \\' . PHP_EOL .
+                // '--metadata-json-file %s/metadata.json \\' . PHP_EOL .
                 '%s',
 
                 CARDANO_CLI,
                 NETWORK_ERA,
                 $tempDir,
+                $tempDir,
                 $request->designer_change_address,
+                $request->designer_collateral,
                 $txIns,
-                $scriptOutput,
+                $scriptTxIn,
+                env('DESIGN_CONTRACT_LOCKING_REFERENCE_TX_ID'),
                 $tempDir,
+                $returnStarterNFT,
                 $tempDir,
-                config('adosia.policies.designer.policy_id'),
-                bin2hex($assetName),
+                $designNFTMarketplaceOutput,
                 $tempDir,
-                $request->designer_pkh,
-                $designerPolicyPKH,
+                $designNFTNameOutput,
+                env('DESIGN_CONTRACT_MINTING_REFERENCE_TX_ID'),
+                env('DESIGN_POLICY_ID'),
+                $tempDir,
+                // $tempDir,
                 cardanoNetworkFlag(),
             );
-            shellExec($mintCommand, __FUNCTION__, __FILE__, __LINE__);
+            shellExec($mintAndLockCommand, __FUNCTION__, __FILE__, __LINE__);
 
             // Read the draft tx
             $draftTx = json_decode(file_get_contents(sprintf(
@@ -152,118 +210,6 @@ class DesignerController extends Controller
             // Success
             return $this->successResponse([
                 'transaction' => $draftTx['cborHex'],
-            ]);
-
-        } catch (Throwable $exception) {
-
-            return $this->jsonException($exception);
-
-        } finally {
-
-            if ($tempDir) {
-                rrmdir($tempDir);
-            }
-
-        }
-    }
-
-    public function mintDesignAssemble(Request $request): JsonResponse
-    {
-        $tempDir = null;
-
-        try {
-
-            // Initialise temp directory
-            $tempDir = createTempDir(__FUNCTION__);
-
-            // Export designer policy skey
-            file_put_contents(
-                "$tempDir/designer_mint_policy.skey",
-                config('adosia.policies.designer.skey'),
-            );
-
-            // Write the tx.draft
-            file_put_contents(
-                sprintf('%s/tx.draft', $tempDir),
-                json_encode([
-                    'type' => TX_DRAFT_TYPE,
-                    'description' => TX_DRAFT_DESCRIPTION,
-                    'cborHex' => $request->transactionCbor,
-                ], JSON_THROW_ON_ERROR),
-            );
-
-            // Write the wallet witness
-            $walletTxVkeyWitnesses = $request->walletTxVkeyWitnesses;
-            if (str_starts_with($walletTxVkeyWitnesses, 'a10081')) {
-                $walletTxVkeyWitnesses = substr($walletTxVkeyWitnesses, 6, strlen($walletTxVkeyWitnesses));
-            }
-            file_put_contents(
-                sprintf('%s/wallet.witness', $tempDir),
-                json_encode([
-                    'type' => TX_WITNESS_TYPE,
-                    'description' => TX_WITNESS_DESCRIPTION,
-                    'cborHex' => $walletTxVkeyWitnesses,
-                ], JSON_THROW_ON_ERROR),
-            );
-
-            // Witness the tx by policy skey
-            $witnessByPolicyCommand = sprintf(
-                '%s transaction witness \\' . PHP_EOL .
-                '--tx-body-file %s/tx.draft \\' . PHP_EOL .
-                '--signing-key-file %s/designer_mint_policy.skey \\' . PHP_EOL .
-                '--out-file %s/tx.witness \\' . PHP_EOL .
-                '%s',
-
-                CARDANO_CLI,
-                $tempDir,
-                $tempDir,
-                $tempDir,
-                cardanoNetworkFlag(),
-            );
-            shellExec($witnessByPolicyCommand, __FUNCTION__, __FILE__, __LINE__);
-
-            // Assemble the transaction
-            $assembleTxCommand = sprintf(
-                '%s transaction assemble \\' . PHP_EOL .
-                '--tx-body-file %s/tx.draft \\' . PHP_EOL .
-                '--witness-file %s/tx.witness \\' . PHP_EOL .
-                '--witness-file %s/wallet.witness \\' . PHP_EOL .
-                '--out-file %s/tx.signed',
-
-                CARDANO_CLI,
-                $tempDir,
-                $tempDir,
-                $tempDir,
-                $tempDir,
-            );
-            shellExec($assembleTxCommand, __FUNCTION__, __FILE__, __LINE__);
-
-            // Generate transaction id
-            $generateTxIdCommand = sprintf(
-                '%s transaction txid \\' . PHP_EOL .
-                '--tx-file %s/tx.signed',
-
-                CARDANO_CLI,
-                $tempDir,
-            );
-            $txId = shellExec($generateTxIdCommand, __FUNCTION__, __FILE__, __LINE__);
-
-            // Submit the transaction
-            $submitTxCommand = sprintf(
-                '%s transaction submit \\' . PHP_EOL .
-                '--tx-file %s/tx.signed \\' . PHP_EOL .
-                '%s',
-
-                CARDANO_CLI,
-                $tempDir,
-                cardanoNetworkFlag(),
-            );
-            $txStatus = shellExec($submitTxCommand, __FUNCTION__, __FILE__, __LINE__);
-
-            // Debug
-            return $this->successResponse([
-                'txId' => $txId,
-                'txStatus' => $txStatus,
             ]);
 
         } catch (Throwable $exception) {
