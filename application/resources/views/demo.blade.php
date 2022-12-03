@@ -228,7 +228,7 @@
                         const getCollateral = window.connectedWallet.experimental.getCollateral || window.connectedWallet.getCollateral;
                         const collateralCBOR = await getCollateral();
                         if (collateralCBOR.length === 0) {
-                            showToast('error', `Please configure <strong>Collateral<strong> in your <strong>${ supportedWalletNames[walletName] }</strong> wallet`);
+                            showToast('error', `Please configure <strong>Collateral</strong> in your wallet`);
                             return;
                         }
                         const collateralUtxo = utxoCborToJSON(collateralCBOR[0]);
@@ -263,11 +263,11 @@
                                 "stl_models": [
                                     {
                                         "qty": 2,
-                                        "src": "ifps://QmRyBaGYu1bbthdkHUA2YjyUK43uPtKcoVuF8NpFk2Z6tm",
+                                        "src": "ipfs://QmRyBaGYu1bbthdkHUA2YjyUK43uPtKcoVuF8NpFk2Z6tm",
                                     },
                                     {
                                         "qty": 1,
-                                        "src": "ifps://QmZCX5tXTko3wzyttK63SNTMpgfoGLwzUj7i6hA6tEWfqy",
+                                        "src": "ipfs://QmZCX5tXTko3wzyttK63SNTMpgfoGLwzUj7i6hA6tEWfqy",
                                     },
                                 ],
                                 "print_price_lovelace": 10000000,

@@ -23,22 +23,6 @@ class DesignerController extends Controller
             // Export protocol parameters
             exportProtocolParams($tempDir);
 
-            // Generate marketplace datum
-            file_put_contents(
-                "$tempDir/marketplace_datum.json",
-                json_encode([
-                    'constructor' => 0,
-                    'fields' => [
-                        [ 'bytes' => $request->designer_pkh ],
-                        [ 'bytes' => $request->designer_stake_key ],
-                        [ 'bytes' => bin2hex(env('DESIGN_PREFIX')) ],
-                        [ 'int' => 0 ],
-                        [ 'bytes' => env('PURCHASE_ORDER_POLICY_ID') ],
-                        [ 'int' => $request->print_price_lovelace ],
-                    ]
-                ], JSON_THROW_ON_ERROR),
-            );
-
             // Generate mint redeemer
             file_put_contents(
                 "$tempDir/mint_redeemer.json",
@@ -88,6 +72,22 @@ class DesignerController extends Controller
                 }
             }
             $nextDesignNumber = ($currentDesignNumber + 1);
+
+            // Generate marketplace datum
+            file_put_contents(
+                "$tempDir/marketplace_datum.json",
+                json_encode([
+                    'constructor' => 0,
+                    'fields' => [
+                        [ 'bytes' => $request->designer_pkh ],
+                        [ 'bytes' => $request->designer_stake_key ],
+                        [ 'bytes' => bin2hex(env('DESIGN_PREFIX') . $currentDesignNumber) ],
+                        [ 'int' => 0 ],
+                        [ 'bytes' => env('PURCHASE_ORDER_POLICY_ID') ],
+                        [ 'int' => $request->print_price_lovelace ],
+                    ]
+                ], JSON_THROW_ON_ERROR),
+            );
 
             // Calculate minUTXO
             $minUTXOCommand = sprintf(
