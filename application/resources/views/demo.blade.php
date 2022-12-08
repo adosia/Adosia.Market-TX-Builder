@@ -131,10 +131,10 @@
                 return inputs;
             };
 
-            const getFundedUtxos = (allInputs) => {
+            const getFundedUtxos = (allInputs, designerCollateral) => {
                 let utxoList = [];
                 allInputs.forEach(input => {
-                    if (input.tokens.length === 0) {
+                    if (input.tokens.length === 0 && input.utxo !== designerCollateral) {
                         utxoList.push(input.utxo);
                     }
                 });
@@ -234,7 +234,7 @@
                         const collateralUtxo = utxoCborToJSON(collateralCBOR[0]);
                         const designerCollateral = `${ collateralUtxo.txId }#${ collateralUtxo.index }`;
 
-                        const fundedUtxos = getFundedUtxos(getAllInputs(await window.connectedWallet.getUtxos()));
+                        const fundedUtxos = getFundedUtxos(getAllInputs(await window.connectedWallet.getUtxos()), designerCollateral);
                         if (fundedUtxos.length === 0) {
                             showToast('error', 'Pure ada only utxo inputs exhausted, send 5 ada to yourself and try again');
                             return;
@@ -303,6 +303,8 @@
                                 if (singedTxCBOR.indexOf('d90103a100') === -1) {
                                     singedTxCBOR = singedTxCBOR.replace('a11902d1', 'd90103a100a11902d1');
                                 }
+
+                                console.log('singedTxCBOR', singedTxCBOR);
 
                                 await window.connectedWallet.submitTx(singedTxCBOR);
 
