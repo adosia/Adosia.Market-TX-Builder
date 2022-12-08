@@ -35,8 +35,8 @@ class DesignerController extends Controller
             // Generate metadata json
             file_put_contents(
                 "$tempDir/metadata.json",
-                json_encode([
-                    "721" => [
+                json_encode((object) [
+                    "721" => (object) [
                         'name' => substr($request->name, 0, 64),
                         'image' => $request->image,
                         'glb_model' => $request->glb_model,
@@ -175,7 +175,7 @@ class DesignerController extends Controller
                 '--mint-plutus-script-v2 \\' . PHP_EOL .
                 '--policy-id="%s" \\' . PHP_EOL .
                 '--mint-reference-tx-in-redeemer-file %s/mint_redeemer.json \\' . PHP_EOL .
-                // '--metadata-json-file %s/metadata.json \\' . PHP_EOL .
+                '--metadata-json-file %s/metadata.json \\' . PHP_EOL .
                 '%s',
 
                 CARDANO_CLI,
@@ -196,7 +196,7 @@ class DesignerController extends Controller
                 env('DESIGN_CONTRACT_MINTING_REFERENCE_TX_ID'),
                 env('DESIGN_POLICY_ID'),
                 $tempDir,
-                // $tempDir,
+                $tempDir,
                 cardanoNetworkFlag(),
             );
             shellExec($mintAndLockCommand, __FUNCTION__, __FILE__, __LINE__);

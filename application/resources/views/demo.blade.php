@@ -217,7 +217,7 @@
                             return;
                         }
 
-                        showToast('success', `Connected to <strong>${ supportedWalletNames[walletName] }</strong> wallet`, 1500);
+                        showToast('success', `Connected to <strong>${ supportedWalletNames[walletName] }</strong> wallet`, 1000);
 
                         $demoActions.show();
 
@@ -286,19 +286,8 @@
                                 const txWitness = tx.witness_set();
                                 const txMetadata = tx.auxiliary_data();
 
-                                // console.log(txMetadata.to_json());
-                                // console.log(toHex(txMetadata.to_bytes()));
-
                                 const txVkeyWitnesses = await window.connectedWallet.signTx(response.data.transaction, true);
                                 const witnesses = CSL.TransactionWitnessSet.from_bytes(fromHex(txVkeyWitnesses));
-
-                                // //const transactionWitnessSet = CSL.TransactionWitnessSet.new();
-                                // const txVkeys = txWitness.vkeys();
-                                // for (let i = 0; witnesses.vkeys().len(); i++) {
-                                //     txVkeys.add(witnesses.vkeys().get(i))
-                                // }
-                                // //transactionWitnessSet.set_vkeys(txVkeys);
-                                // txWitness.set_vkeys(txVkeys);
 
                                 const transactionWitnessSet = CSL.TransactionWitnessSet.new();
                                 transactionWitnessSet.set_vkeys(witnesses.vkeys());
@@ -307,14 +296,22 @@
                                 const signedTx = CSL.Transaction.new(
                                     tx.body(),
                                     transactionWitnessSet,
-                                    // txMetadata,
+                                    txMetadata,
                                 );
 
-                                console.log(toHex(signedTx.to_bytes()));
+                                let singedTxCBOR = toHex(signedTx.to_bytes()).toLowerCase();
+                                if (singedTxCBOR.indexOf('d90103a100') === -1) {
+                                    singedTxCBOR = singedTxCBOR.replace('a11902d1', 'd90103a100a11902d1');
+                                }
 
-                                const txId = await window.connectedWallet.submitTx(toHex(signedTx.to_bytes()));
+                                console.log('draftTx', response.data.transaction);
+                                console.log('signedTxModified', singedTxCBOR);
 
-                                showToast('success', `Transaction ID is <strong>${ txId }</strong>`);
+                                await window.connectedWallet.submitTx(singedTxCBOR);
+
+                                // TODO: To calculate the real tx id, see: https://ddzgroup.slack.com/archives/D0494H6NT40/p1670462391398179
+                                // TODO: Use the Constants to re-create signed tx file
+                                showToast('success', `Transaction was <strong>success</strong>`);
 
                             } else {
 
