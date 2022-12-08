@@ -304,9 +304,6 @@
                                     singedTxCBOR = singedTxCBOR.replace('a11902d1', 'd90103a100a11902d1');
                                 }
 
-                                console.log('draftTx', response.data.transaction);
-                                console.log('signedTxModified', singedTxCBOR);
-
                                 await window.connectedWallet.submitTx(singedTxCBOR);
 
                                 // TODO: To calculate the real tx id, see: https://ddzgroup.slack.com/archives/D0494H6NT40/p1670462391398179
