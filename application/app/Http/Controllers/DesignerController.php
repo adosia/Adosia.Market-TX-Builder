@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use Throwable;
+use RuntimeException;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Http;
 use App\Http\Traits\JsonResponseTrait;
 
 class DesignerController extends Controller
@@ -223,10 +225,213 @@ class DesignerController extends Controller
         } finally {
 
             if ($tempDir) {
-                // rrmdir($tempDir);
+                rrmdir($tempDir);
             }
 
         }
     }
 
+    public function mintUpdate(Request $request): JsonResponse
+    {
+        $tempDir = null;
+
+        try {
+
+            // Initialise temp directory
+            $tempDir = createTempDir(__FUNCTION__);
+
+            // Export protocol parameters
+            exportProtocolParams($tempDir);
+
+            // Find the design utxo
+            /**
+             * NOTES: Blockfrost does not return the correct index on the first api call,
+             * so we have to make 2 redundant api calls to get the txIndex
+             */
+            $assetId = env('DESIGN_POLICY_ID') . bin2hex($request->design_name);
+            $assetTransactions = $this->callBlockFrost("assets/$assetId/transactions?count=1&page=1&order=desc");
+            if (!count($assetTransactions)) {
+                throw new RuntimeException('Failed to load asset transactions');
+            }
+            $txId = $assetTransactions[0]['tx_hash'];
+            $assetTransactionUTXOs = $this->callBlockFrost("txs/$txId/utxos");
+            $txIndex = null;
+            foreach ($assetTransactionUTXOs['outputs'] as $output) {
+                foreach ($output['amount'] as $amount) {
+                    if ($amount['unit'] === $assetId) {
+                        $txIndex = $output['output_index'];
+                    }
+                }
+                if (!is_null($txIndex)) {
+                    break;
+                }
+            }
+            if (is_null($txIndex)) {
+                throw new RuntimeException('Failed to locate asset in smart contract');
+            }
+            $designUTXO = "$txId#$txIndex";
+
+            // Export design utxo data
+            $exportDesignUTXOCommand = sprintf(
+                '%s query utxo \\' . PHP_EOL .
+                '--tx-in %s \\' . PHP_EOL .
+                '--out-file %s/design.utxo \\' . PHP_EOL .
+                '%s',
+
+                CARDANO_CLI,
+                $designUTXO,
+                $tempDir,
+                cardanoNetworkFlag(),
+            );
+            shellExec($exportDesignUTXOCommand, __FUNCTION__, __FILE__, __LINE__);
+            $designUTXOData = json_decode(
+                file_get_contents(sprintf('%s/design.utxo', $tempDir)),
+                true, 512, JSON_THROW_ON_ERROR
+            )[$designUTXO];
+
+            // Generate new marketplace datum
+            $inlineDatum = $designUTXOData['inlineDatum'];
+            $inlineDatum['fields'][5]['int'] = ($request->is_free ? 1 : $request->print_price_lovelace);
+            $inlineDatum['fields'][6]['int'] = ($request->is_free ? 1 : 0);
+            file_put_contents(
+                "$tempDir/updated_marketplace_datum.json",
+                json_encode($inlineDatum, JSON_THROW_ON_ERROR),
+            );
+
+            // Calculate new minUTXO
+            $minUTXOCommand = sprintf(
+                '%s transaction calculate-min-required-utxo \\' . PHP_EOL .
+                '%s \\' . PHP_EOL .
+                '--protocol-params-file %s/protocol.json \\' . PHP_EOL .
+                '--tx-out="%s + 5000000 + 1 %s.%s" \\' . PHP_EOL .
+                '--tx-out-inline-datum-file %s/updated_marketplace_datum.json ' .
+                '| tr -dc \'0-9\'',
+
+                CARDANO_CLI,
+                NETWORK_ERA,
+                $tempDir,
+                env('MARKETPLACE_CONTRACT_SCRIPT_ADDRESS'),
+                env('DESIGN_POLICY_ID'),
+                bin2hex($request->design_name),
+                $tempDir,
+            );
+            $updatedDesignMinUTXO = (int) shellExec($minUTXOCommand, __FUNCTION__, __FILE__, __LINE__);
+
+            // Calculate minUTXO difference
+            $oldDesignMinUTXO = (int) $designUTXOData['value']['lovelace'];
+            $designMinUTXODelta = $updatedDesignMinUTXO - $oldDesignMinUTXO;
+
+            // Generate update redeemer
+            file_put_contents(
+                "$tempDir/updated_redeemer.json",
+                json_encode([
+                    'constructor' => 1,
+                    'fields' => [[
+                        'constructor' => 0,
+                        'fields' => [
+                            [ 'int' => (max($designMinUTXODelta, 0)) ],
+                        ],
+                    ]],
+                ], JSON_THROW_ON_ERROR),
+            );
+
+            // Generate input transaction ids
+            $txIns = '';
+            foreach ($request->designer_input_tx_ids as $txId) {
+                $txIns .= '--tx-in ' . $txId . ' \\' . PHP_EOL;
+            }
+
+            // Generate design nft output
+            $designNFTNameOutput = sprintf(
+                '1 %s.%s',
+
+                env('DESIGN_POLICY_ID'),
+                bin2hex($request->design_name),
+            );
+            $designNFTMarketplaceOutput = sprintf(
+                '%s + %d + %s',
+
+                env('MARKETPLACE_CONTRACT_SCRIPT_ADDRESS'),
+                max($oldDesignMinUTXO, $updatedDesignMinUTXO),
+                $designNFTNameOutput,
+            );
+
+            // Update sale
+            $updateSaleCommand = sprintf(
+                '%s transaction build \\' . PHP_EOL .
+                '%s \\' . PHP_EOL .
+                '--protocol-params-file %s/protocol.json \\' . PHP_EOL .
+                '--out-file %s/tx.draft \\' . PHP_EOL .
+                '--change-address %s \\' . PHP_EOL .
+                '--tx-in-collateral="%s" \\' . PHP_EOL .
+                '%s' .
+                '--tx-in %s \\' . PHP_EOL .
+                '--spending-tx-in-reference="%s" \\' . PHP_EOL .
+                '--spending-plutus-script-v2 \\' . PHP_EOL .
+                '--spending-reference-tx-in-inline-datum-present \\' . PHP_EOL .
+                '--spending-reference-tx-in-redeemer-file %s/updated_redeemer.json \\' . PHP_EOL .
+                '--tx-out="%s" \\' . PHP_EOL .
+                '--tx-out-inline-datum-file %s/updated_marketplace_datum.json \\' . PHP_EOL .
+                '--required-signer-hash %s \\' . PHP_EOL .
+                '%s',
+
+                CARDANO_CLI,
+                NETWORK_ERA,
+                $tempDir,
+                $tempDir,
+                $request->designer_change_address,
+                $request->designer_collateral,
+                $txIns,
+                $designUTXO,
+                env('MARKETPLACE_LOCKING_REFERENCE_TX_ID'),
+                $tempDir,
+                $designNFTMarketplaceOutput,
+                $tempDir,
+                $designUTXOData['inlineDatum']['fields'][0]['bytes'],
+                cardanoNetworkFlag(),
+            );
+            shellExec($updateSaleCommand, __FUNCTION__, __FILE__, __LINE__);
+
+            // Read the draft tx
+            $draftTx = json_decode(file_get_contents(sprintf(
+                "%s/tx.draft",
+                $tempDir,
+            )), true, 512, JSON_THROW_ON_ERROR);
+
+            // Success
+            return $this->successResponse([
+                'transaction' => $draftTx['cborHex'],
+            ]);
+
+        } catch (Throwable $exception) {
+
+            return $this->jsonException($exception);
+
+        } finally {
+
+            if ($tempDir) {
+                rrmdir($tempDir);
+            }
+
+        }
+    }
+
+    private function callBlockFrost(string $endpoint): array
+    {
+        $requestUrl = sprintf(
+            'https://cardano-%s.blockfrost.io/api/v0/%s',
+            env('CARDANO_NETWORK'),
+            $endpoint,
+        );
+
+        $response = Http::withHeaders([
+            'project_id' => env('BLOCK_FROST_PROJECT_ID'),
+        ])->get($requestUrl);
+
+        if ($response->successful()) {
+            return $response->json();
+        }
+
+        throw new RuntimeException('Blockfrost api call error: ' . $response->json('message'));
+    }
 }

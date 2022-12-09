@@ -20,7 +20,8 @@
         </div>
 
         <div id="demo-actions" style="display: none;">
-            <div class="card">
+
+            <div class="card mb-3">
                 <div class="card-body">
                     <h4 class="mb-3">2. Mint & Lock Demo</h4>
                     <form id="mint-form">
@@ -102,6 +103,16 @@
                     </form>
                 </div>
             </div>
+
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h4 class="mb-3">3. Update Price Demo</h4>
+                    <form id="update-form">
+                        TODO
+                    </form>
+                </div>
+            </div>
+
         </div>
 
     </div>
