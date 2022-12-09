@@ -58,7 +58,10 @@ class DesignerController extends Controller
                 cardanoNetworkFlag(),
             );
             shellExec($parseDesignContractInlineDatumCommand, __FUNCTION__, __FILE__, __LINE__);
-            $deignContractInlineDatum = json_decode(file_get_contents(sprintf('%s/design_datum.json', $tempDir)), true, 512, JSON_THROW_ON_ERROR);
+            $deignContractInlineDatum = json_decode(
+                file_get_contents(sprintf('%s/design_datum.json', $tempDir)),
+                true, 512, JSON_THROW_ON_ERROR,
+            );
 
             // Parse script info
             $scriptTxIn = null;
@@ -85,7 +88,8 @@ class DesignerController extends Controller
                         [ 'int' => 0 ],
                         [ 'bytes' => env('PURCHASE_ORDER_POLICY_ID') ],
                         [ 'int' => $request->print_price_lovelace ],
-                    ]
+                        [ 'int' => $request->print_price_lovelace > 1000000 ? 0 : 1 ], // is free?
+                    ],
                 ], JSON_THROW_ON_ERROR),
             );
 
@@ -219,7 +223,7 @@ class DesignerController extends Controller
         } finally {
 
             if ($tempDir) {
-                rrmdir($tempDir);
+                // rrmdir($tempDir);
             }
 
         }

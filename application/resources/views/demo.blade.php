@@ -20,10 +20,88 @@
         </div>
 
         <div id="demo-actions" style="display: none;">
-            <h4 class="mb-3">2. Run Demo</h4>
-            <button class="btn btn-primary demo-action designer-mint">
-                Designer: Mint &amp; Send to Marketplace
-            </button>
+            <div class="card">
+                <div class="card-body">
+                    <h4 class="mb-3">2. Mint & Lock Demo</h4>
+                    <form id="mint-form">
+                        <div class="mb-3">
+                            <label for="name" class="form-label"><strong>Design Name</strong></label>
+                            <input id="name" name="name" maxlength="64" placeholder="e.g. Space Rocket" type="text" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="image" class="form-label"><strong>Thumbnail Image</strong></label>
+                            <input id="image" name="image" aria-describedby="imageHelp" maxlength="64" placeholder="e.g. ipfs://xxx or ar://yyy" type="text" class="form-control form-control-sm" required>
+                            <div id="imageHelp" class="form-text">This is a preview image of the design uploaded to either IPFS or Arweave</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="glb_model" class="form-label"><strong>GLB Model</strong></label>
+                            <input id="glb_model" name="glb_model" aria-describedby="glbModelHelp" maxlength="64" placeholder="e.g. ipfs://xxx or ar://yyy" type="text" class="form-control form-control-sm" required>
+                            <div id="glbModelHelp" class="form-text">This is a GBL model of you design, uploaded to either IPFS or Arweave</div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="stl_files" class="form-label mb-0"><strong>STL File</strong></label>
+                                    <input id="stl_files" name="stl_files_1" aria-describedby="stlFilesHelp" maxlength="64" placeholder="e.g. ipfs://xxx or ar://yyy" type="text" class="form-control form-control-sm" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="print_quantities" class="form-label mb-0"><strong>Print Quantity</strong></label>
+                                    <input id="print_quantities" name="print_quantities_1" aria-describedby="glbModelHelp" maxlength="10" placeholder="e.g. 2" type="number" min="1" step="1" class="form-control form-control-sm" required>
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="stl_files" class="form-label mb-0"><strong>STL File</strong></label>
+                                    <input id="stl_files" name="stl_files_2" aria-describedby="stlFilesHelp" maxlength="64" placeholder="e.g. ipfs://xxx or ar://yyy" type="text" class="form-control form-control-sm">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="print_quantities" class="form-label mb-0"><strong>Print Quantity</strong></label>
+                                    <input id="print_quantities" name="print_quantities_2" aria-describedby="glbModelHelp" maxlength="10" placeholder="e.g. 2" type="number" min="1" step="1" class="form-control form-control-sm">
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="stl_files" class="form-label mb-0"><strong>STL File</strong></label>
+                                    <input id="stl_files" name="stl_files_3" aria-describedby="stlFilesHelp" maxlength="64" placeholder="e.g. ipfs://xxx or ar://yyy" type="text" class="form-control form-control-sm">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="print_quantities" class="form-label mb-0"><strong>Print Quantity</strong></label>
+                                    <input id="print_quantities" name="print_quantities_3" aria-describedby="glbModelHelp" maxlength="10" placeholder="e.g. 2" type="number" min="1" step="1" class="form-control form-control-sm">
+                                </div>
+                            </div>
+                            <div id="stlFilesHelp" class="form-text">
+                                Provide hash for the STL (3D Print) files uploaded to either IPFS or Arweave and number of print quantity for each
+                                <br>
+                                You can specify up to 3 files during the demo (later this will be dynamic)
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input is_free" type="radio" name="is_free" value="yes" id="free" checked>
+                                <label class="form-check-label" for="free">
+                                    <strong>Free</strong> Design
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input is_free" type="radio" name="is_free" value="no" id="paid">
+                                <label class="form-check-label" for="paid">
+                                    <strong>Paid</strong> Design
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="mb-3" id="print_price_container" style="display: none;">
+                            <label for="print_price" class="form-label"><strong>Print Price</strong></label>
+                            <input id="print_price" name="print_price" aria-describedby="printPriceHelp" maxlength="10" placeholder="e.g. 15" type="number" min="1" class="form-control form-control-sm">
+                            <div id="printPriceHelp" class="form-text">How much would you like to be paid in ₳DA, everytime this design is printed?</div>
+                        </div>
+
+                        <button type="submit" class="btn mint-button btn-primary">
+                            Designer: Mint &amp; Send to Marketplace
+                        </button>
+                    </form>
+                </div>
+            </div>
         </div>
 
     </div>
@@ -223,7 +301,23 @@
 
                     });
 
-                    $demoActions.on('click', 'button.designer-mint', async function () {
+                    $demoActions.on('change', 'input.is_free', function () {
+                        if ($(this).val() === 'no') {
+                            $('div#print_price_container').show();
+                            $('input#print_price').attr('required', true);
+                        } else {
+                            $('div#print_price_container').hide();
+                            $('input#print_price').removeAttr('required');
+                        }
+                    });
+
+                    $demoActions.on('submit', 'form#mint-form', async function (e) {
+
+                        e.preventDefault();
+
+                        const mintData = $('form#mint-form').serializeArray();
+                        $('form#mint-form input').attr('disabled', true);
+                        $('button.mint-button').addClass('disabled');
 
                         const getCollateral = window.connectedWallet.experimental.getCollateral || window.connectedWallet.getCollateral;
                         const collateralCBOR = await getCollateral();
@@ -240,14 +334,45 @@
                             return;
                         }
 
-                        $('button.demo-action').addClass('disabled');
-
                         const walletBasePKH = await window.connectedWallet.getChangeAddress();
                         const designerPKH = walletBasePKH.slice(2, 58);
                         const designerStakeKey = walletBasePKH.slice(58);
                         const designerChangeAddress = CSL.Address.from_bytes(Uint8Array.from(fromHex(walletBasePKH))).to_bech32(
                             'addr' + (networkMode === 0 ? '_test' : ''),
                         );
+
+                        const mintRequest = {};
+                        mintData.forEach((mintDatum) => {
+                            if (mintDatum.name.indexOf('stl_files') === -1 &&
+                                mintDatum.name.indexOf('print_quantities') === -1 &&
+                                mintDatum.name.indexOf('is_free') === -1 &&
+                                mintDatum.name.indexOf('print_price') === -1
+                            ) {
+                                mintRequest[mintDatum.name] = mintDatum.value.trim();
+                            }
+                        });
+                        if ($('input#paid').is(':checked')) {
+                            const printPrice = mintData.find(s => s.name === 'print_price');
+                            mintRequest.print_price_lovelace = parseInt(printPrice.value) * 1000000;
+                        } else {
+                            mintRequest.print_price_lovelace = 1;
+                        }
+                        mintRequest.stl_models = [];
+                        for (let i = 1; i <= 3; i++) {
+                            const stlFile = mintData.find(s => s.name === 'stl_files_' + i);
+                            const printQuantity = mintData.find(s => s.name === 'print_quantities_' + i);
+                            if (stlFile.value.length && printQuantity.value.length) {
+                                mintRequest.stl_models.push({
+                                    qty: parseInt(printQuantity.value),
+                                    src: stlFile.value.trim(),
+                                });
+                            }
+                        }
+                        mintRequest.designer_pkh = designerPKH;
+                        mintRequest.designer_stake_key = designerStakeKey;
+                        mintRequest.designer_change_address = designerChangeAddress;
+                        mintRequest.designer_input_tx_ids = fundedUtxos;
+                        mintRequest.designer_collateral = designerCollateral;
 
                         const settings = {
                             "url": "/mint/design",
@@ -256,27 +381,7 @@
                             "headers": {
                                 "Content-Type": "application/json"
                             },
-                            "data": JSON.stringify({
-                                "name": "Space Rocket",
-                                "image": "ipfs://QmQWG57Vpq2pPfuzBn2bS8UEj4M1GnCa5PpqSU6k5fyNQC",
-                                "glb_model": "ipfs://QmQTXTycfwuEfr4Lk6W1Za8UjzyQor2znwVKfd7Jy7DUaM",
-                                "stl_models": [
-                                    {
-                                        "qty": 2,
-                                        "src": "ipfs://QmRyBaGYu1bbthdkHUA2YjyUK43uPtKcoVuF8NpFk2Z6tm",
-                                    },
-                                    {
-                                        "qty": 1,
-                                        "src": "ipfs://QmZCX5tXTko3wzyttK63SNTMpgfoGLwzUj7i6hA6tEWfqy",
-                                    },
-                                ],
-                                "print_price_lovelace": 10000000,
-                                "designer_pkh": designerPKH,
-                                "designer_stake_key": designerStakeKey,
-                                "designer_change_address": designerChangeAddress,
-                                "designer_input_tx_ids": fundedUtxos,
-                                "designer_collateral": designerCollateral,
-                            }),
+                            "data": JSON.stringify(mintRequest),
                         };
 
                         $.ajax(settings).done(async function (response) {
@@ -303,8 +408,6 @@
                                 if (singedTxCBOR.indexOf('d90103a100') === -1) {
                                     singedTxCBOR = singedTxCBOR.replace('a11902d1', 'd90103a100a11902d1');
                                 }
-
-                                console.log('singedTxCBOR', singedTxCBOR);
 
                                 await window.connectedWallet.submitTx(singedTxCBOR);
 
