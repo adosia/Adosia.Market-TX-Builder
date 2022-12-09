@@ -90,15 +90,13 @@
                                 </label>
                             </div>
                         </div>
-
                         <div class="mb-3" id="print_price_container" style="display: none;">
                             <label for="print_price" class="form-label"><strong>Print Price</strong></label>
                             <input id="print_price" name="print_price" aria-describedby="printPriceHelp" maxlength="10" placeholder="e.g. 15" type="number" min="1" class="form-control form-control-sm">
                             <div id="printPriceHelp" class="form-text">How much would you like to be paid in ₳DA, everytime this design is printed?</div>
                         </div>
-
                         <button type="submit" class="btn mint-button btn-primary">
-                            Designer: Mint &amp; Send to Marketplace
+                            Designer: <strong>Mint &amp; Send to Marketplace</strong>
                         </button>
                     </form>
                 </div>
@@ -108,7 +106,34 @@
                 <div class="card-body">
                     <h4 class="mb-3">3. Update Price Demo</h4>
                     <form id="update-form">
-                        TODO
+                        <div class="mb-3">
+                            <label for="design_name" class="form-label"><strong>Adosia Design Name</strong></label>
+                            <input id="design_name" name="design_name" maxlength="64" placeholder="e.g. Adosia_Designs_123" type="text" class="form-control form-control-sm" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input update_is_free" type="radio" name="update_is_free" value="yes" id="update_free" checked>
+                                <label class="form-check-label" for="update_free">
+                                    <strong>Free</strong> Design
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input update_is_free" type="radio" name="update_is_free" value="no" id="update_paid">
+                                <label class="form-check-label" for="update_paid">
+                                    <strong>Paid</strong> Design
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="mb-3" id="update_print_price_container" style="display: none;">
+                            <label for="update_print_price" class="form-label"><strong>Print Price</strong></label>
+                            <input id="update_print_price" name="update_print_price" aria-describedby="updatePrintPriceHelp" maxlength="10" placeholder="e.g. 15" type="number" min="1" class="form-control form-control-sm">
+                            <div id="updatePrintPriceHelp" class="form-text">How much would you like to be paid in ₳DA, everytime this design is printed?</div>
+                        </div>
+                        <button type="submit" class="btn update-button btn-primary">
+                            Designer: <strong>Update Price</strong>
+                        </button>
                     </form>
                 </div>
             </div>
@@ -322,6 +347,16 @@
                         }
                     });
 
+                    $demoActions.on('change', 'input.update_is_free', function () {
+                        if ($(this).val() === 'no') {
+                            $('div#update_print_price_container').show();
+                            $('input#update_print_price').attr('required', true);
+                        } else {
+                            $('div#update_print_price_container').hide();
+                            $('input#update_print_price').removeAttr('required');
+                        }
+                    });
+
                     $demoActions.on('submit', 'form#mint-form', async function (e) {
 
                         e.preventDefault();
@@ -393,6 +428,102 @@
                                 "Content-Type": "application/json"
                             },
                             "data": JSON.stringify(mintRequest),
+                        };
+
+                        $.ajax(settings).done(async function (response) {
+                            if (response.data) {
+
+                                const tx = CSL.Transaction.from_bytes(fromHex(response.data.transaction));
+                                const txWitness = tx.witness_set();
+                                const txMetadata = tx.auxiliary_data();
+
+                                const txVkeyWitnesses = await window.connectedWallet.signTx(response.data.transaction, true);
+                                const witnesses = CSL.TransactionWitnessSet.from_bytes(fromHex(txVkeyWitnesses));
+
+                                const transactionWitnessSet = CSL.TransactionWitnessSet.new();
+                                transactionWitnessSet.set_vkeys(witnesses.vkeys());
+                                transactionWitnessSet.set_redeemers(txWitness.redeemers());
+
+                                const signedTx = CSL.Transaction.new(
+                                    tx.body(),
+                                    transactionWitnessSet,
+                                    txMetadata,
+                                );
+
+                                let singedTxCBOR = toHex(signedTx.to_bytes()).toLowerCase();
+                                if (singedTxCBOR.indexOf('d90103a100') === -1) {
+                                    singedTxCBOR = singedTxCBOR.replace('a11902d1', 'd90103a100a11902d1');
+                                }
+
+                                await window.connectedWallet.submitTx(singedTxCBOR);
+
+                                // TODO: To calculate the real tx id, see: https://ddzgroup.slack.com/archives/D0494H6NT40/p1670462391398179
+                                // TODO: Use the Constants to re-create signed tx file
+                                showToast('success', `Transaction was <strong>success</strong>`);
+
+                            } else {
+
+                                showToast('error', response.error.message || response.error);
+
+                            }
+                        }).catch(err => {
+                            showToast('error', 'Something went wrong, check developer console');
+                            console.log(err);
+                        });
+
+                    });
+
+                    $demoActions.on('submit', 'form#update-form', async function(e) {
+
+                        e.preventDefault();
+
+                        const mintData = $('form#update-form').serializeArray();
+                        $('form#update-form input').attr('disabled', true);
+                        $('button.update-button').addClass('disabled');
+
+                        const getCollateral = window.connectedWallet.experimental.getCollateral || window.connectedWallet.getCollateral;
+                        const collateralCBOR = await getCollateral();
+                        if (collateralCBOR.length === 0) {
+                            showToast('error', `Please configure <strong>Collateral</strong> in your wallet`);
+                            return;
+                        }
+                        const collateralUtxo = utxoCborToJSON(collateralCBOR[0]);
+                        const designerCollateral = `${ collateralUtxo.txId }#${ collateralUtxo.index }`;
+
+                        const fundedUtxos = getFundedUtxos(getAllInputs(await window.connectedWallet.getUtxos()), designerCollateral);
+                        if (fundedUtxos.length === 0) {
+                            showToast('error', 'Pure ada only utxo inputs exhausted, send 5 ada to yourself and try again');
+                            return;
+                        }
+
+                        const walletBasePKH = await window.connectedWallet.getChangeAddress();
+                        const designerPKH = walletBasePKH.slice(2, 58);
+                        const designerChangeAddress = CSL.Address.from_bytes(Uint8Array.from(fromHex(walletBasePKH))).to_bech32(
+                            'addr' + (networkMode === 0 ? '_test' : ''),
+                        );
+
+                        const designName = $('input#design_name').val();
+                        const isFree = $('input#update_free').is(':checked');
+                        const newPrice = $('input#update_print_price').val();
+
+                        const updateRequest = {
+                            design_name: designName,
+                            is_free: isFree,
+                            print_price_lovelace: (isFree ? 1 : (parseInt(newPrice) * 1000000)),
+                            designer_pkh: designerPKH,
+                            designer_change_address: designerChangeAddress,
+                            designer_input_tx_ids: fundedUtxos,
+                            designer_collateral: designerCollateral,
+                        };
+
+                        const settings = {
+                            "url": "/mint/update",
+                            "method": "POST",
+                            "timeout": 0,
+                            "headers": {
+                                "Content-Type": "application/json"
+                            },
+                            "data": JSON.stringify(updateRequest),
                         };
 
                         $.ajax(settings).done(async function (response) {
