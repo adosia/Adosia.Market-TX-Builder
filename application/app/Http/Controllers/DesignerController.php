@@ -6,12 +6,12 @@ use Throwable;
 use RuntimeException;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Http;
+use App\Http\Traits\BlockFrostTrait;
 use App\Http\Traits\JsonResponseTrait;
 
 class DesignerController extends Controller
 {
-    use JsonResponseTrait;
+    use JsonResponseTrait, BlockFrostTrait;
 
     public function mintDesign(Request $request): JsonResponse
     {
@@ -38,7 +38,7 @@ class DesignerController extends Controller
             file_put_contents(
                 "$tempDir/metadata.json",
                 json_encode((object) [
-                    "721" => (object) [
+                    DESIGN_METADATA_INDEX => (object) [
                         'name' => substr($request->name, 0, 64),
                         'image' => $request->image,
                         'glb_model' => $request->glb_model,
@@ -60,7 +60,7 @@ class DesignerController extends Controller
                 cardanoNetworkFlag(),
             );
             shellExec($parseDesignContractInlineDatumCommand, __FUNCTION__, __FILE__, __LINE__);
-            $deignContractInlineDatum = json_decode(
+            $designContractInlineDatum = json_decode(
                 file_get_contents(sprintf('%s/design_datum.json', $tempDir)),
                 true, 512, JSON_THROW_ON_ERROR,
             );
@@ -69,7 +69,7 @@ class DesignerController extends Controller
             $scriptTxIn = null;
             $currentDesignNumber = null;
             $designReturnMinUTXO = null;
-            foreach ($deignContractInlineDatum as $utxo => $utxoData) {
+            foreach ($designContractInlineDatum as $utxo => $utxoData) {
                 if (isset($utxoData['value'][env('DESIGN_STARTER_POLICY_ID')][env('DESIGN_STARTER_ASSET_ID')])) {
                     $scriptTxIn = $utxo;
                     $currentDesignNumber = (int) $utxoData['inlineDatum']['fields'][1]['int'];
@@ -145,7 +145,7 @@ class DesignerController extends Controller
                 $designNFTNameOutput,
             );
 
-            // Generate marketplace datum
+            // Generate new design datum
             file_put_contents(
                 "$tempDir/token_design_datum.json",
                 json_encode([
@@ -414,24 +414,5 @@ class DesignerController extends Controller
             }
 
         }
-    }
-
-    private function callBlockFrost(string $endpoint): array
-    {
-        $requestUrl = sprintf(
-            'https://cardano-%s.blockfrost.io/api/v0/%s',
-            env('CARDANO_NETWORK'),
-            $endpoint,
-        );
-
-        $response = Http::withHeaders([
-            'project_id' => env('BLOCK_FROST_PROJECT_ID'),
-        ])->get($requestUrl);
-
-        if ($response->successful()) {
-            return $response->json();
-        }
-
-        throw new RuntimeException('Blockfrost api call error: ' . $response->json('message'));
     }
 }

@@ -6,7 +6,6 @@ ARG LINUX_USERNAME
 ARG CURRENT_UID
 ARG CURRENT_GID
 ARG CARDANO_NODE_VERSION
-ARG CARDANO_NODE_BUILD
 ARG CARDANO_NETWORK
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -49,10 +48,11 @@ WORKDIR /home/${LINUX_USERNAME}/application
 RUN mkdir -p ~/cardano-node/bin && \
     mkdir ~/cnode-src && \
     cd ~/cnode-src && \
-    wget https://hydra.iohk.io/build/${CARDANO_NODE_BUILD}/download/1/cardano-node-${CARDANO_NODE_VERSION}-linux.tar.gz && \
+    wget https://update-cardano-mainnet.iohk.io/cardano-node-releases/cardano-node-${CARDANO_NODE_VERSION}-linux.tar.gz && \
     tar -xvf cardano-node-${CARDANO_NODE_VERSION}*.tar.gz && \
     cp cardano-node ~/cardano-node/bin/cardano-node && \
     cp cardano-cli ~/cardano-node/bin/cardano-cli && \
+    cp bech32 ~/cardano-node/bin/bech32 && \
     rm -rf ~/cnode-src && \
     echo 'export PATH="$PATH:$HOME/cardano-node/bin"' >> ~/.bashrc
 

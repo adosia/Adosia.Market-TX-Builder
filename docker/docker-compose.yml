@@ -12,7 +12,6 @@ services:
         CURRENT_UID: ${CURRENT_UID}
         CURRENT_GID: ${CURRENT_GID}
         CARDANO_NODE_VERSION: ${CARDANO_NODE_VERSION}
-        CARDANO_NODE_BUILD: ${CARDANO_NODE_BUILD}
         CARDANO_NETWORK: ${CARDANO_NETWORK}
     container_name: adosia-market-tx-builder-web
     restart: unless-stopped

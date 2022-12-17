@@ -23,7 +23,7 @@
 
             <div class="card mb-3">
                 <div class="card-body">
-                    <h4 class="mb-3">2. Mint & Lock Demo</h4>
+                    <h4 class="mb-3">2. [ Designer ] Mint & Lock Demo</h4>
                     <form id="mint-form">
                         <div class="mb-3">
                             <label for="name" class="form-label"><strong>Design Name</strong></label>
@@ -104,7 +104,7 @@
 
             <div class="card mb-3">
                 <div class="card-body">
-                    <h4 class="mb-3">3. Update Price Demo</h4>
+                    <h4 class="mb-3">3. [ Designer ] Update Price Demo</h4>
                     <form id="update-form">
                         <div class="mb-3">
                             <label for="design_name" class="form-label"><strong>Adosia Design Name</strong></label>
@@ -133,6 +133,22 @@
                         </div>
                         <button type="submit" class="btn update-button btn-primary">
                             Designer: <strong>Update Price</strong>
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h4 class="mb-3">4. [ Customer ] Print Design Demo</h4>
+                    <form id="print-form">
+                        <div class="mb-3">
+                            <label for="design_name" class="form-label"><strong>Adosia Design Name</strong></label>
+                            <input id="design_name" name="design_name" maxlength="64" placeholder="e.g. Adosia_Designs_123" type="text" class="form-control form-control-sm" required>
+                        </div>
+
+                        <button type="submit" class="btn print-button btn-primary">
+                            Customer: <strong>Print Design</strong>
                         </button>
                     </form>
                 </div>
@@ -421,7 +437,7 @@
                         mintRequest.designer_collateral = designerCollateral;
 
                         const settings = {
-                            "url": "/mint/design",
+                            "url": "/designer/mint/design",
                             "method": "POST",
                             "timeout": 0,
                             "headers": {
@@ -477,7 +493,6 @@
 
                         e.preventDefault();
 
-                        const mintData = $('form#update-form').serializeArray();
                         $('form#update-form input').attr('disabled', true);
                         $('button.update-button').addClass('disabled');
 
@@ -517,7 +532,7 @@
                         };
 
                         const settings = {
-                            "url": "/mint/update",
+                            "url": "/designer/mint/update",
                             "method": "POST",
                             "timeout": 0,
                             "headers": {
@@ -566,6 +581,17 @@
                             showToast('error', 'Something went wrong, check developer console');
                             console.log(err);
                         });
+
+                    });
+
+                    $demoActions.on('submit', 'form#print-form', async function(e) {
+
+                        e.preventDefault();
+
+                        $('form#print-form input').attr('disabled', true);
+                        $('button.print-button').addClass('disabled');
+
+                        alert('todo')
 
                     });
 

@@ -94,6 +94,9 @@ function exportProtocolParams(string $tempDir): void {
     shellExec($command, __FUNCTION__, __FILE__, __LINE__);
 }
 
+/**
+ * @return bool
+ */
 function isTestnet(): bool {
     return env('CARDANO_NETWORK') !== 'mainnet';
 }
