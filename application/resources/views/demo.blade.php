@@ -143,8 +143,8 @@
                     <h4 class="mb-3">4. [ Customer ] Print Design Demo</h4>
                     <form id="print-form">
                         <div class="mb-3">
-                            <label for="design_name" class="form-label"><strong>Adosia Design Name</strong></label>
-                            <input id="design_name" name="design_name" maxlength="64" placeholder="e.g. Adosia_Designs_123" type="text" class="form-control form-control-sm" required>
+                            <label for="print_design_name" class="form-label"><strong>Adosia Design Name</strong></label>
+                            <input id="print_design_name" name="print_design_name" maxlength="64" placeholder="e.g. Adosia_Designs_69" type="text" class="form-control form-control-sm" required>
                         </div>
 
                         <button type="submit" class="btn print-button btn-primary">
@@ -591,7 +591,89 @@
                         $('form#print-form input').attr('disabled', true);
                         $('button.print-button').addClass('disabled');
 
-                        alert('todo')
+                        const getCollateral = window.connectedWallet.experimental.getCollateral || window.connectedWallet.getCollateral;
+                        const collateralCBOR = await getCollateral();
+                        if (collateralCBOR.length === 0) {
+                            showToast('error', `Please configure <strong>Collateral</strong> in your wallet`);
+                            return;
+                        }
+                        const collateralUtxo = utxoCborToJSON(collateralCBOR[0]);
+                        const customerCollateral = `${ collateralUtxo.txId }#${ collateralUtxo.index }`;
+
+                        const fundedUtxos = getFundedUtxos(getAllInputs(await window.connectedWallet.getUtxos()), customerCollateral);
+                        if (fundedUtxos.length === 0) {
+                            showToast('error', 'Pure ada only utxo inputs exhausted, send 5 ada to yourself and try again');
+                            return;
+                        }
+
+                        const walletBasePKH = await window.connectedWallet.getChangeAddress();
+                        const customerPKH = walletBasePKH.slice(2, 58);
+                        const customerStakeKey = walletBasePKH.slice(58);
+                        const customerChangeAddress = CSL.Address.from_bytes(Uint8Array.from(fromHex(walletBasePKH))).to_bech32(
+                            'addr' + (networkMode === 0 ? '_test' : ''),
+                        );
+
+                        const designName = $('input#print_design_name').val();
+
+                        const printRequest = {
+                            design_name: designName,
+                            customer_pkh: customerPKH,
+                            customer_stake_key: customerStakeKey,
+                            customer_change_address: customerChangeAddress,
+                            customer_input_tx_ids: fundedUtxos,
+                            customer_collateral: customerCollateral,
+                        };
+
+                        const settings = {
+                            "url": "/customer/purchase-order/print-design",
+                            "method": "POST",
+                            "timeout": 0,
+                            "headers": {
+                                "Content-Type": "application/json"
+                            },
+                            "data": JSON.stringify(printRequest),
+                        };
+
+                        $.ajax(settings).done(async function (response) {
+                            if (response.data) {
+
+                                const tx = CSL.Transaction.from_bytes(fromHex(response.data.transaction));
+                                const txWitness = tx.witness_set();
+                                const txMetadata = tx.auxiliary_data();
+
+                                const txVkeyWitnesses = await window.connectedWallet.signTx(response.data.transaction, true);
+                                const witnesses = CSL.TransactionWitnessSet.from_bytes(fromHex(txVkeyWitnesses));
+
+                                const transactionWitnessSet = CSL.TransactionWitnessSet.new();
+                                transactionWitnessSet.set_vkeys(witnesses.vkeys());
+                                transactionWitnessSet.set_redeemers(txWitness.redeemers());
+
+                                const signedTx = CSL.Transaction.new(
+                                    tx.body(),
+                                    transactionWitnessSet,
+                                    txMetadata,
+                                );
+
+                                let singedTxCBOR = toHex(signedTx.to_bytes()).toLowerCase();
+                                if (singedTxCBOR.indexOf('d90103a100') === -1) {
+                                    singedTxCBOR = singedTxCBOR.replace('a11902d1', 'd90103a100a11902d1');
+                                }
+
+                                await window.connectedWallet.submitTx(singedTxCBOR);
+
+                                // TODO: To calculate the real tx id, see: https://ddzgroup.slack.com/archives/D0494H6NT40/p1670462391398179
+                                // TODO: Use the Constants to re-create signed tx file
+                                showToast('success', `Transaction was <strong>success</strong>`);
+
+                            } else {
+
+                                showToast('error', response.error.message || response.error);
+
+                            }
+                        }).catch(err => {
+                            showToast('error', 'Something went wrong, check developer console');
+                            console.log(err);
+                        });
 
                     });
 
