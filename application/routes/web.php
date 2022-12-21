@@ -14,6 +14,7 @@ $router->group(['prefix' => 'designer'], function() use($router) {
 /** @var Router $router */
 $router->group(['prefix' => 'customer'], function() use($router) {
     $router->post('purchase-order/print-design', 'CustomerController@purchaseOrderPrintDesign');
+    $router->post('purchase-order/remove', 'CustomerController@purchaseOrderRemove');
 });
 
 // TEST ROUTE
