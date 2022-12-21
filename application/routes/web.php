@@ -6,6 +6,11 @@ define('CARDANO_CLI', '/home/' . env('LINUX_USERNAME') . '/cardano-node/bin/card
 define('BECH32', '/home/' . env('LINUX_USERNAME') . '/cardano-node/bin/bech32');
 
 /** @var Router $router */
+$router->group(['prefix' => 'auth'], function() use($router) {
+    $router->post('validate/signature', 'AuthController@validateSignature');
+});
+
+/** @var Router $router */
 $router->group(['prefix' => 'designer'], function() use($router) {
     $router->post('mint/design', 'DesignerController@mintDesign');
     $router->post('mint/update', 'DesignerController@mintUpdate');

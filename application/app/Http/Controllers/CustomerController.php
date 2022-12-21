@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Exceptions\AppException;
-use RuntimeException;
 use Throwable;
+use RuntimeException;
 use Illuminate\Http\Request;
+use App\Exceptions\AppException;
 use Illuminate\Http\JsonResponse;
 use App\Http\Traits\BlockFrostTrait;
 use App\Http\Traits\JsonResponseTrait;
