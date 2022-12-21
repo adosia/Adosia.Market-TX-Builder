@@ -1,6 +1,6 @@
 #!/usr/bin/make
 
-export COMPOSE_PROJECT_NAME=adosiamarket
+export COMPOSE_PROJECT_NAME=adosiamarket_tx_builder
 export COMPOSE_FILE=docker/docker-compose.yml
 
 include ./docker/.env
@@ -17,6 +17,7 @@ up:
 	$(MAKE) down
 	docker-compose up -d
 	$(MAKE) composer-install
+	docker exec -it adosia-market-tx-builder-web bash -c "npm install"
 	$(MAKE) status
 
 .PHONY: down
@@ -32,13 +33,9 @@ build:
 status:
 	docker-compose ps
 
-.PHONY: web-shell
-web-shell:
+.PHONY: shell
+shell:
 	docker exec -it adosia-market-tx-builder-web bash
-
-.PHONY: nodejs-shell
-nodejs-shell:
-	docker exec -it adosia-market-tx-builder-nodejs bash
 
 .PHONY: stats
 stats:

@@ -12,6 +12,8 @@ ARG DEBIAN_FRONTEND=noninteractive
 # Update base system
 RUN apt-get update && \
     apt-get install --no-install-recommends -y wget curl nano sudo libzip-dev zip unzip netbase iproute2 jq bc
+RUN curl -fsSL https://deb.nodesource.com/setup_19.x | sudo -E bash -
+RUN sudo apt-get install -y nodejs
 
 # Configure php & apache
 RUN cp /usr/local/etc/php/php.ini-production php.ini && \

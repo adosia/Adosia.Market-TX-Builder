@@ -6,7 +6,7 @@ services:
   adosia-market-tx-builder-web:
     build:
       context: ..
-      dockerfile: docker/Web.Dockerfile
+      dockerfile: docker/Dockerfile
       args:
         LINUX_USERNAME: ${LINUX_USERNAME}
         CURRENT_UID: ${CURRENT_UID}
@@ -28,17 +28,6 @@ services:
     ports:
       - "8030:80"
       - "6000:6000"
-
-  # Transaction Builder NodeJS Service
-  adosia-market-tx-builder-nodejs:
-    build:
-      context: ..
-      dockerfile: docker/NodeJS.Dockerfile
-    container_name: adosia-market-tx-builder-nodejs
-    restart: unless-stopped
-    user: "${CURRENT_UID}:${CURRENT_GID}"
-    tty: true
-    networks: [ adosia-market-tx-builder ]
 
 networks:
   adosia-market-tx-builder:
