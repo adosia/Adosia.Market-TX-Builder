@@ -170,6 +170,22 @@
                 </div>
             </div>
 
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h4 class="mb-3">5. [ Customer ] Add Design Purchase Order back into Printing Pool Demo</h4>
+                    <form id="add-form">
+                        <div class="mb-3">
+                            <label for="add_po_name" class="form-label"><strong>Adosia Design Purchase Order Name</strong></label>
+                            <input id="add_po_name" name="add_po_name" maxlength="64" placeholder="e.g. Adosia_Designs_41_7" type="text" class="form-control form-control-sm" required>
+                        </div>
+
+                        <button type="submit" class="btn add-button btn-primary">
+                            Customer: <strong>Add Design Purchase Order</strong>
+                        </button>
+                    </form>
+                </div>
+            </div>
+
         </div>
 
     </div>
@@ -223,6 +239,10 @@
                 return Buffer.Buffer.from(bytes).toString('hex');
             };
 
+            const stringToHex = (string) => {
+                return new Buffer.Buffer(string).toString('hex');
+            };
+
             const token = (amount, policyId, assetName) => {
                 return {
                     pid: policyId,
@@ -258,6 +278,63 @@
                     }
                 }
                 return jsonObj;
+            };
+
+            let valueToCbor = (lovelace, valueObj) => {
+                const valueMap = new Map()
+                for (const pid in valueObj) {
+                    for (const tkn in valueObj[pid]) {
+                        const tokenMap = new Map();
+                        tokenMap.set(fromHex(tkn), valueObj[pid][tkn]);
+                        valueMap.set(fromHex(pid), tokenMap);
+                    }
+                }
+                return cbors.Encoder.encode([lovelace, valueMap]).toString('hex');
+            };
+
+            const getNested = (obj, ...args) => {
+                return args.reduce((obj, level) => obj && obj[level], obj)
+            };
+
+            const parseInputsAndChange = (allInputs, selectedAssets) => {
+                const usedInputs = [];
+                const returnedAssets = [];
+
+                let allInputsFlat = {};
+                allInputs.forEach((input) => {
+                    usedInputs.push(input.utxo);
+                    input.tokens.forEach((token) => {
+                        if (getNested(allInputsFlat, token.pid) === undefined) {
+                            allInputsFlat[token.pid] = {};
+                        }
+                        if (getNested(allInputsFlat, token.pid, token.tkn) === undefined) {
+                            allInputsFlat[token.pid][token.tkn] = 0;
+                        }
+                        allInputsFlat[token.pid][token.tkn] += token.amt;
+                    });
+                });
+
+                selectedAssets.forEach((selectedAsset) => {
+                    allInputsFlat[selectedAsset.pid][selectedAsset.tkn] -= selectedAsset.amt;
+                });
+
+                for (const pid in allInputsFlat) {
+                    for (const tkn in allInputsFlat[pid]) {
+                        const remaining = allInputsFlat[pid][tkn];
+                        if (remaining > 0) {
+                            returnedAssets.push({
+                                pid: pid,
+                                tkn: tkn,
+                                amt: remaining,
+                            });
+                        }
+                    }
+                }
+
+                return {
+                    usedInputs,
+                    returnedAssets,
+                };
             };
 
             const getAllInputs = (utxosCborList) => {
@@ -329,7 +406,7 @@
 
                         $(this).removeClass('btn-outline-primary').addClass('btn-primary');
 
-                        const walletName = $(this).data('wallet');
+                        window.walletName = $(this).data('wallet');
                         if (!walletName || window.cardano[walletName] === undefined) {
                             showToast('error', 'Invalid connect wallet request');
                             return;
@@ -779,6 +856,43 @@
                             showToast('error', 'Something went wrong, check developer console');
                             console.log(err);
                         });
+
+                    });
+
+                    $demoActions.on('submit', 'form#add-form', async function(e) {
+
+                        e.preventDefault();
+
+                        // $('form#add-form input').attr('disabled', true);
+                        // $('button.add-button').addClass('disabled');
+
+                        const walletBasePKH = await window.connectedWallet.getChangeAddress();
+                        const customerPKH = walletBasePKH.slice(2, 58);
+                        const customerStakeKey = walletBasePKH.slice(58);
+                        const customerChangeAddress = CSL.Address.from_bytes(Uint8Array.from(fromHex(walletBasePKH))).to_bech32(
+                            'addr' + (networkMode === 0 ? '_test' : ''),
+                        );
+
+                        const selectedAsset = {
+                            "pid": "{{ env('PURCHASE_ORDER_POLICY_ID') }}",
+                            "tkn": stringToHex($('input#add_po_name').val()),
+                            "amt": 1,
+                        };
+
+                        let allInputs;
+                        if (window.walletName === 'nami') {
+                            allInputs = getAllInputs(await window.connectedWallet.getUtxos());
+                        } else {
+                            const valueObj = {}
+                            valueObj[selectedAsset.pid] = {}
+                            valueObj[selectedAsset.pid][selectedAsset.tkn] = selectedAsset.amt;
+                            const cborOutput = valueToCbor(10000000, valueObj);
+                            allInputs = getAllInputs(await window.connectedWallet.getUtxos(cborOutput));
+                        }
+
+                        const inputsAndChange = parseInputsAndChange(allInputs, [selectedAsset]);
+
+                        console.log('inputsAndChange', inputsAndChange);
 
                     });
                 });

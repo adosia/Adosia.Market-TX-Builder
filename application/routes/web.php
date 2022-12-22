@@ -20,6 +20,7 @@ $router->group(['prefix' => 'designer'], function() use($router) {
 $router->group(['prefix' => 'customer'], function() use($router) {
     $router->post('purchase-order/print-design', 'CustomerController@purchaseOrderPrintDesign');
     $router->post('purchase-order/remove', 'CustomerController@purchaseOrderRemove');
+    $router->post('purchase-order/add', 'CustomerController@purchaseOrderAdd');
 });
 
 // TEST ROUTE

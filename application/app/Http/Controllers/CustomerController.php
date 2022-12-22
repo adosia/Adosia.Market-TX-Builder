@@ -402,6 +402,140 @@ class CustomerController extends Controller
         }
     }
 
+    public function purchaseOrderAdd(Request $request): JsonResponse
+    {
+        $tempDir = null;
+
+        try {
+
+            // Initialise temp directory
+            $tempDir = createTempDir(__FUNCTION__);
+
+            // Export protocol parameters
+            exportProtocolParams($tempDir);
+
+            // Find the purchase order utxo
+            /**
+             * NOTES: Blockfrost does not return the correct index on the first api call,
+             * so we have to make 2 redundant api calls to get the txIndex
+             */
+            $assetId = env('PURCHASE_ORDER_POLICY_ID') . bin2hex($request->po_name);
+            $assetTransactions = $this->callBlockFrost("assets/$assetId/transactions?count=1&page=1&order=desc");
+            if (!count($assetTransactions)) {
+                throw new RuntimeException('Failed to load asset transactions');
+            }
+            $txId = $assetTransactions[0]['tx_hash'];
+            $assetTransactionUTXOs = $this->callBlockFrost("txs/$txId/utxos");
+            $txIndex = null;
+            foreach ($assetTransactionUTXOs['outputs'] as $output) {
+                foreach ($output['amount'] as $amount) {
+                    if ($amount['unit'] === $assetId) {
+                        $txIndex = $output['output_index'];
+                    }
+                }
+                if (!is_null($txIndex)) {
+                    break;
+                }
+            }
+            if (is_null($txIndex)) {
+                throw new RuntimeException('Failed to locate asset in smart contract');
+            }
+            $poUTXO = "$txId#$txIndex";
+
+            // Generate printing pool datum
+            file_put_contents(
+                "$tempDir/printing_pool_datum.json",
+                json_encode([
+                    'constructor' => 0,
+                    'fields' => [[
+                        'constructor' => 0,
+                        'fields' => [
+                            [ 'bytes' => $request->customer_pkh ],
+                            [ 'bytes' => $request->customer_stake_key ],
+                            [ 'list' => [[ 'int' => 1 ]] ],
+                            [ 'bytes' => bin2hex($request->po_name) ],
+                        ],
+                    ]],
+                ], JSON_THROW_ON_ERROR),
+            );
+
+            // Calculate minUTXO
+            $minUTXOCommand = sprintf(
+                '%s transaction calculate-min-required-utxo \\' . PHP_EOL .
+                '%s \\' . PHP_EOL .
+                '--protocol-params-file %s/protocol.json \\' . PHP_EOL .
+                '--tx-out="%s + 5000000 + 1 %s.%s" \\' . PHP_EOL .
+                '--tx-out-inline-datum-file %s/printing_pool_datum.json ' .
+                '| tr -dc \'0-9\'',
+
+                CARDANO_CLI,
+                NETWORK_ERA,
+                $tempDir,
+                env('PRINTING_POOL_CONTRACT_SCRIPT_ADDRESS'),
+                env('PURCHASE_ORDER_POLICY_ID'),
+                bin2hex($request->po_name),
+                $tempDir,
+            );
+            $poMinUTXO = shellExec($minUTXOCommand, __FUNCTION__, __FILE__, __LINE__);
+
+            // Generate input transaction ids
+            $txIns = '';
+            foreach ([$poUTXO, ...$request->customer_input_tx_ids] as $txId) {
+                $txIns .= '--tx-in ' . $txId . ' \\' . PHP_EOL;
+            }
+
+            // Generate po nft output
+            $poNFTNameOutput = sprintf(
+                '1 %s.%s',
+
+                env('PURCHASE_ORDER_POLICY_ID'),
+                bin2hex($request->po_name),
+            );
+            $poNFTPrintingPoolOutput = sprintf(
+                '%s + %d + %s',
+
+                env('PRINTING_POOL_CONTRACT_SCRIPT_ADDRESS'),
+                $poMinUTXO,
+                $poNFTNameOutput,
+            );
+
+            // Build add command
+            $addCommand = sprintf(
+                '%s transaction build \\' . PHP_EOL .
+                '%s \\' . PHP_EOL .
+                '--protocol-params-file %s/protocol.json \\' . PHP_EOL .
+                '--out-file %s/tx.draft \\' . PHP_EOL .
+                '--change-address %s \\' . PHP_EOL .
+                '%s' .
+                '--tx-out="%s" \\' . PHP_EOL .
+                '--tx-out-inline-datum-file %s/printing_pool_datum.json \\' . PHP_EOL .
+                '%s',
+
+                CARDANO_CLI,
+                NETWORK_ERA,
+                $tempDir,
+                $tempDir,
+                $request->customer_change_address,
+                $txIns,
+                $poNFTPrintingPoolOutput,
+                $tempDir,
+                cardanoNetworkFlag(),
+            );
+            shellExec($addCommand, __FUNCTION__, __FILE__, __LINE__);
+
+        }  catch (Throwable $exception) {
+
+            return $this->jsonException($exception);
+
+        } finally {
+
+            if ($tempDir) {
+                rrmdir($tempDir);
+            }
+
+        }
+    }
+
     /**
      * @throws AppException
      */
