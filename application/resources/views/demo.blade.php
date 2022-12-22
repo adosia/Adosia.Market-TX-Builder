@@ -863,8 +863,8 @@
 
                         e.preventDefault();
 
-                        // $('form#add-form input').attr('disabled', true);
-                        // $('button.add-button').addClass('disabled');
+                        $('form#add-form input').attr('disabled', true);
+                        $('button.add-button').addClass('disabled');
 
                         const walletBasePKH = await window.connectedWallet.getChangeAddress();
                         const customerPKH = walletBasePKH.slice(2, 58);
@@ -873,9 +873,11 @@
                             'addr' + (networkMode === 0 ? '_test' : ''),
                         );
 
+                        const poName = $('input#add_po_name').val();
+
                         const selectedAsset = {
                             "pid": "{{ env('PURCHASE_ORDER_POLICY_ID') }}",
-                            "tkn": stringToHex($('input#add_po_name').val()),
+                            "tkn": stringToHex(poName),
                             "amt": 1,
                         };
 
@@ -892,7 +894,69 @@
 
                         const inputsAndChange = parseInputsAndChange(allInputs, [selectedAsset]);
 
-                        console.log('inputsAndChange', inputsAndChange);
+                        const addRequest = {
+                            po_name: poName,
+                            customer_pkh: customerPKH,
+                            customer_stake_key: customerStakeKey,
+                            customer_change_address: customerChangeAddress,
+                            customer_input_tx_ids: inputsAndChange.usedInputs,
+                            customer_returned_assets: inputsAndChange.returnedAssets,
+                        };
+
+                        const settings = {
+                            "url": "/customer/purchase-order/add",
+                            "method": "POST",
+                            "timeout": 0,
+                            "headers": {
+                                "Content-Type": "application/json"
+                            },
+                            "data": JSON.stringify(addRequest),
+                        };
+
+                        $.ajax(settings).done(async function (response) {
+                            if (response.data) {
+
+                                const tx = CSL.Transaction.from_bytes(fromHex(response.data.transaction));
+                                const txWitness = tx.witness_set();
+                                const txMetadata = tx.auxiliary_data();
+
+                                const txVkeyWitnesses = await window.connectedWallet.signTx(response.data.transaction, true);
+                                const witnesses = CSL.TransactionWitnessSet.from_bytes(fromHex(txVkeyWitnesses));
+
+                                const transactionWitnessSet = CSL.TransactionWitnessSet.new();
+                                transactionWitnessSet.set_vkeys(witnesses.vkeys());
+                                // TODO: Notice me senpai this needs to be in the global tx handler
+                                // TODO: not everything will have redeemers for e.g.
+                                if (txWitness.redeemers() !== undefined) {
+                                    transactionWitnessSet.set_redeemers(txWitness.redeemers());
+                                }
+
+                                const signedTx = CSL.Transaction.new(
+                                    tx.body(),
+                                    transactionWitnessSet,
+                                    txMetadata,
+                                );
+
+                                let singedTxCBOR = toHex(signedTx.to_bytes()).toLowerCase();
+                                if (singedTxCBOR.indexOf('d90103a100') === -1) {
+                                    singedTxCBOR = singedTxCBOR.replace('a11902d1', 'd90103a100a11902d1');
+                                }
+
+                                await window.connectedWallet.submitTx(singedTxCBOR);
+
+                                // TODO: To calculate the real tx id, see: https://ddzgroup.slack.com/archives/D0494H6NT40/p1670462391398179
+                                // TODO: Use the Constants to re-create signed tx file
+                                showToast('success', `Transaction was <strong>success</strong>`);
+
+                            } else {
+
+                                showToast('error', response.error.message || response.error);
+
+                            }
+                        }).catch(err => {
+                            showToast('error', 'Something went wrong, check developer console');
+                            console.log(err);
+                        });
 
                     });
                 });

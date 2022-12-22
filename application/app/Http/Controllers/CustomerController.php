@@ -414,34 +414,6 @@ class CustomerController extends Controller
             // Export protocol parameters
             exportProtocolParams($tempDir);
 
-            // Find the purchase order utxo
-            /**
-             * NOTES: Blockfrost does not return the correct index on the first api call,
-             * so we have to make 2 redundant api calls to get the txIndex
-             */
-            $assetId = env('PURCHASE_ORDER_POLICY_ID') . bin2hex($request->po_name);
-            $assetTransactions = $this->callBlockFrost("assets/$assetId/transactions?count=1&page=1&order=desc");
-            if (!count($assetTransactions)) {
-                throw new RuntimeException('Failed to load asset transactions');
-            }
-            $txId = $assetTransactions[0]['tx_hash'];
-            $assetTransactionUTXOs = $this->callBlockFrost("txs/$txId/utxos");
-            $txIndex = null;
-            foreach ($assetTransactionUTXOs['outputs'] as $output) {
-                foreach ($output['amount'] as $amount) {
-                    if ($amount['unit'] === $assetId) {
-                        $txIndex = $output['output_index'];
-                    }
-                }
-                if (!is_null($txIndex)) {
-                    break;
-                }
-            }
-            if (is_null($txIndex)) {
-                throw new RuntimeException('Failed to locate asset in smart contract');
-            }
-            $poUTXO = "$txId#$txIndex";
-
             // Generate printing pool datum
             file_put_contents(
                 "$tempDir/printing_pool_datum.json",
@@ -480,8 +452,39 @@ class CustomerController extends Controller
 
             // Generate input transaction ids
             $txIns = '';
-            foreach ([$poUTXO, ...$request->customer_input_tx_ids] as $txId) {
+            foreach ($request->customer_input_tx_ids as $txId) {
                 $txIns .= '--tx-in ' . $txId . ' \\' . PHP_EOL;
+            }
+
+            // Generate customer asset return outputs
+            $txOuts = '';
+            if (count($request->customer_returned_assets)) {
+                $outputLines = [];
+                foreach ($request->customer_returned_assets as $asset) {
+                    $outputLines[] = "{$asset['amt']} {$asset['pid']}.{$asset['tkn']}";
+                }
+                $txOuts = implode(' + ', $outputLines);
+                $txOutsMinUTXOCommand = sprintf(
+                    '%s transaction calculate-min-required-utxo \\' . PHP_EOL .
+                    '%s \\' . PHP_EOL .
+                    '--protocol-params-file %s/protocol.json \\' . PHP_EOL .
+                    '--tx-out="%s + 5000000 + %s"' .
+                    '| tr -dc \'0-9\'',
+
+                    CARDANO_CLI,
+                    NETWORK_ERA,
+                    $tempDir,
+                    $request->customer_change_address,
+                    $txOuts,
+                );
+                $txOutsMinUTXO = shellExec($txOutsMinUTXOCommand, __FUNCTION__, __FILE__, __LINE__);
+                $txOuts = sprintf(
+                    '--tx-out="%s + %d + %s"',
+
+                    $request->customer_change_address,
+                    $txOutsMinUTXO,
+                    $txOuts,
+                );
             }
 
             // Generate po nft output
@@ -509,6 +512,7 @@ class CustomerController extends Controller
                 '%s' .
                 '--tx-out="%s" \\' . PHP_EOL .
                 '--tx-out-inline-datum-file %s/printing_pool_datum.json \\' . PHP_EOL .
+                '%s \\' . PHP_EOL .
                 '%s',
 
                 CARDANO_CLI,
@@ -519,9 +523,21 @@ class CustomerController extends Controller
                 $txIns,
                 $poNFTPrintingPoolOutput,
                 $tempDir,
+                $txOuts,
                 cardanoNetworkFlag(),
             );
             shellExec($addCommand, __FUNCTION__, __FILE__, __LINE__);
+
+            // Read the draft tx
+            $draftTx = json_decode(file_get_contents(sprintf(
+                "%s/tx.draft",
+                $tempDir,
+            )), true, 512, JSON_THROW_ON_ERROR);
+
+            // Success
+            return $this->successResponse([
+                'transaction' => $draftTx['cborHex'],
+            ]);
 
         }  catch (Throwable $exception) {
 
