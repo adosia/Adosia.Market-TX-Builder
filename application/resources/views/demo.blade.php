@@ -172,7 +172,7 @@
 
             <div class="card mb-3">
                 <div class="card-body">
-                    <h4 class="mb-3">5. [ Customer ] Add Design Purchase Order back into Printing Pool Demo</h4>
+                    <h4 class="mb-3">6. [ Customer ] Add Design Purchase Order back into Printing Pool Demo</h4>
                     <form id="add-form">
                         <div class="mb-3">
                             <label for="add_po_name" class="form-label"><strong>Adosia Design Purchase Order Name</strong></label>
@@ -181,6 +181,30 @@
 
                         <button type="submit" class="btn add-button btn-primary">
                             Customer: <strong>Add Design Purchase Order</strong>
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h4 class="mb-3">7. [ Printer Operator ] Make an Offer Demo</h4>
+                    <form id="offer-form">
+                        <div class="mb-3">
+                            <label for="offer_po_name" class="form-label"><strong>Adosia Design Purchase Order Name</strong></label>
+                            <input id="offer_po_name" name="offer_po_name" maxlength="64" placeholder="e.g. Adosia_Designs_33_2" type="text" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="offer_ada_amount" class="form-label"><strong>Offer Amount in ₳DA</strong></label>
+                            <input id="offer_ada_amount" name="offer_ada_amount" aria-describedby="offerADAAmountHelp" type="number" min="1" step="1" class="form-control form-control-sm" required>
+                            <div id="offerADAAmountHelp" class="form-text">How much would you charge in ₳DA to print this?</div>
+                        </div>
+                        <div class="mb-3">
+                            <textarea rows="3" id="offer_signature" class="form-control form-control-sm" placeholder="Printer Operator Offer Signature will appear here ..." disabled aria-label=""></textarea>
+                        </div>
+
+                        <button type="submit" class="btn offer-button btn-primary">
+                            Printer Operator: <strong>Make an Offer</strong>
                         </button>
                     </form>
                 </div>
@@ -957,6 +981,27 @@
                             showToast('error', 'Something went wrong, check developer console');
                             console.log(err);
                         });
+
+                    });
+
+                    $demoActions.on('submit', 'form#offer-form', async function(e) {
+
+                        e.preventDefault();
+
+                        $('form#offer-form input').attr('disabled', true);
+                        $('button.offer-button').addClass('disabled');
+
+                        const walletBasePKH = await window.connectedWallet.getChangeAddress();
+                        const customerPKH = walletBasePKH.slice(2, 58);
+                        const customerStakeKey = walletBasePKH.slice(58);
+                        const customerChangeAddress = CSL.Address.from_bytes(Uint8Array.from(fromHex(walletBasePKH))).to_bech32(
+                            'addr' + (networkMode === 0 ? '_test' : ''),
+                        );
+
+                        const poName = $('input#offer_po_name').val();
+                        const offerAmount = parseInt($('input#offer_ada_amount').val()) * 1000000;
+
+                        // TODO rest
 
                     });
                 });

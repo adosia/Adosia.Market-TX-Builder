@@ -23,6 +23,11 @@ $router->group(['prefix' => 'customer'], function() use($router) {
     $router->post('purchase-order/add', 'CustomerController@purchaseOrderAdd');
 });
 
+/** @var Router $router */
+$router->group(['prefix' => 'printer-operator'], function() use($router) {
+    $router->post('purchase-order/make-offer', 'PrinterOperatorController@purchaseOrderMakeOffer');
+});
+
 // TEST ROUTE
 if (count(array_intersect(['local', 'staging'], [$router->app->environment()]))) {
     $router->get('demo', function () { return view('demo'); });

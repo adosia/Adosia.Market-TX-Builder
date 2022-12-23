@@ -17,17 +17,26 @@ const publicKeyToStakeKey = (publicKey, isTestnet) => {
 };
 
 const authValidateSignature = (jsonPayload) => {
-    const payload = JSON.parse(jsonPayload);
-    const publicKey = sigKeyToPublicKey(payload.key);
-    const stakeAddr = publicKeyToStakeKey(publicKey, payload.is_testnet);
-    const coseSign1_verify = EMS.COSESign1.from_bytes(toHexBuffer(payload.signature));
-    const signedSigStruc_verify = coseSign1_verify.signed_data();
-    const sig = CSL.Ed25519Signature.from_bytes(coseSign1_verify.signature());
+    try {
+        const payload = JSON.parse(jsonPayload);
+        const publicKey = sigKeyToPublicKey(payload.signature_key);
+        const stakeAddr = publicKeyToStakeKey(publicKey, payload.is_testnet);
+        const coseSign1 = EMS.COSESign1.from_bytes(toHexBuffer(payload.signature_cbor));
+        const signedData = coseSign1.signed_data();
+        const sig = CSL.Ed25519Signature.from_bytes(coseSign1.signature());
 
-    const walletMatches = stakeAddr.to_bech32('stake' + (payload.is_testnet ? '_test' : '')) === payload.challenge.StakeKey;
-    const signatureValidates = publicKey.verify(signedSigStruc_verify.to_bytes(), sig);
+        const walletMatches = stakeAddr.to_bech32('stake' + (payload.is_testnet ? '_test' : '')) === payload.stake_key;
+        const signatureValidates = publicKey.verify(signedData.to_bytes(), sig);
+        const payloadMatches = toHexString(signedData.payload()) === payload.challenge;
 
-    return payload;
+        return (
+            walletMatches &&
+            signatureValidates &&
+            payloadMatches
+        );
+    } catch (e) {
+        return false;
+    }
 };
 
 console.log(authValidateSignature(process.argv.slice(2)[0]));
