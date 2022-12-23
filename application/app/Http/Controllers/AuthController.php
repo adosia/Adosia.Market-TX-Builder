@@ -15,7 +15,24 @@ class AuthController
     {
         try {
 
-            return $this->successResponse($request->all());
+            $payload = $request->only([
+                'challenge',
+                'stake_key',
+                'signature_key',
+                'signature_cbor',
+                'is_testnet',
+            ]);
+
+            $isValid = shellExec(sprintf(
+                'node %s \'%s\'',
+
+                resource_path('nodejs/authValidateSignature.js'),
+                json_encode($payload, JSON_THROW_ON_ERROR)
+            ), __FUNCTION__, __FILE__, __LINE__) === 'true';
+
+            return $this->successResponse([
+                'is_valid' => $isValid,
+            ]);
 
         } catch (Throwable $exception) {
 
