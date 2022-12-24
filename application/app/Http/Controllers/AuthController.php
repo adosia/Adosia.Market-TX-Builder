@@ -11,7 +11,7 @@ class AuthController
 {
     use JsonResponseTrait;
 
-    function validateSignature(Request $request): JsonResponse
+    public function validateSignature(Request $request): JsonResponse
     {
         try {
 
