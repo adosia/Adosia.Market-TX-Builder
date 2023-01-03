@@ -26,6 +26,7 @@ $router->group(['prefix' => 'customer'], function() use($router) {
 /** @var Router $router */
 $router->group(['prefix' => 'printer-operator'], function() use($router) {
     $router->post('purchase-order/make-offer', 'PrinterOperatorController@purchaseOrderMakeOffer');
+    $router->post('purchase-order/remove-offer', 'PrinterOperatorController@purchaseOrderRemoveOffer');
 });
 
 // TEST ROUTE
