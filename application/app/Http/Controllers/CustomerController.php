@@ -176,14 +176,14 @@ class CustomerController extends Controller
                 $designerPaymentOut = '\\' . PHP_EOL;
             }
 
-            // TODO: Load this from db for the original design
             // Generate metadata json
             file_put_contents(
                 "$tempDir/metadata.json",
                 json_encode((object) [
                     DESIGN_METADATA_INDEX => (object) [
-                        'name' => 'Space Rocket',
-                        'image' => 'ipfs://QmQWG57Vpq2pPfuzBn2bS8UEj4M1GnCa5PpqSU6k5fyNQC',
+                        env('PURCHASE_ORDER_POLICY_ID') => [
+                            $poMintName => $this->callBlockFrost('assets/' . env('DESIGN_POLICY_ID') . bin2hex($request->design_name))['onchain_metadata'],
+                        ],
                     ]
                 ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
             );
@@ -257,7 +257,7 @@ class CustomerController extends Controller
         } finally {
 
             if ($tempDir) {
-                //rrmdir($tempDir);
+                rrmdir($tempDir);
             }
 
         }

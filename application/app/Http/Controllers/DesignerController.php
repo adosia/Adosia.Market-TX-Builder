@@ -34,19 +34,6 @@ class DesignerController extends Controller
                 ], JSON_THROW_ON_ERROR),
             );
 
-            // Generate metadata json
-            file_put_contents(
-                "$tempDir/metadata.json",
-                json_encode((object) [
-                    DESIGN_METADATA_INDEX => (object) [
-                        'name' => substr($request->name, 0, 64),
-                        'image' => $request->image,
-                        'glb_model' => $request->glb_model,
-                        'stl_models' => $request->stl_models,
-                    ]
-                ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
-            );
-
             // Parse inline datum of design contract
             $parseDesignContractInlineDatumCommand = sprintf(
                 '%s query utxo \\' . PHP_EOL .
@@ -143,6 +130,23 @@ class DesignerController extends Controller
                 env('MARKETPLACE_CONTRACT_SCRIPT_ADDRESS'),
                 $designMinUTXO,
                 $designNFTNameOutput,
+            );
+
+            // Generate metadata json
+            file_put_contents(
+                "$tempDir/metadata.json",
+                json_encode((object) [
+                    DESIGN_METADATA_INDEX => (object) [
+                        env('DESIGN_POLICY_ID') => [
+                            env('DESIGN_PREFIX') . $currentDesignNumber => [
+                                'name' => substr($request->name, 0, 64),
+                                'image' => $request->image,
+                                'glb_model' => $request->glb_model,
+                                'stl_models' => $request->stl_models,
+                            ],
+                        ],
+                    ],
+                ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
             );
 
             // Generate new design datum
