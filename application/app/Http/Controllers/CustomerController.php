@@ -539,7 +539,206 @@ class CustomerController extends Controller
                 'transaction' => $draftTx['cborHex'],
             ]);
 
-        }  catch (Throwable $exception) {
+        } catch (Throwable $exception) {
+
+            return $this->jsonException($exception);
+
+        } finally {
+
+            if ($tempDir) {
+                rrmdir($tempDir);
+            }
+
+        }
+    }
+
+    public function purchaseOrderAcceptOffer(Request $request): JsonResponse
+    {
+        $tempDir = null;
+
+        try {
+
+            // Initialise temp directory
+            $tempDir = createTempDir(__FUNCTION__);
+
+            // Export protocol parameters
+            exportProtocolParams($tempDir);
+
+            // Export po utxo data
+            $exportPOUTXOCommand = sprintf(
+                '%s query utxo \\' . PHP_EOL .
+                '--tx-in %s \\' . PHP_EOL .
+                '--out-file %s/offer.utxo \\' . PHP_EOL .
+                '%s',
+
+                CARDANO_CLI,
+                $request->po_utxo,
+                $tempDir,
+                cardanoNetworkFlag(),
+            );
+            shellExec($exportPOUTXOCommand, __FUNCTION__, __FILE__, __LINE__);
+            $poUTXOData = json_decode(
+                file_get_contents(sprintf('%s/offer.utxo', $tempDir)),
+                true, 512, JSON_THROW_ON_ERROR
+            )[$request->po_utxo];
+
+            // Parse the po min utxo
+            $poMinUTXO = (int) $poUTXOData['value']['lovelace'];
+
+            // Export offer utxo data
+            $exportOfferUTXOCommand = sprintf(
+                '%s query utxo \\' . PHP_EOL .
+                '--tx-in %s \\' . PHP_EOL .
+                '--out-file %s/offer.utxo \\' . PHP_EOL .
+                '%s',
+
+                CARDANO_CLI,
+                $request->offer_utxo,
+                $tempDir,
+                cardanoNetworkFlag(),
+            );
+            shellExec($exportOfferUTXOCommand, __FUNCTION__, __FILE__, __LINE__);
+            $offerUTXOData = json_decode(
+                file_get_contents(sprintf('%s/offer.utxo', $tempDir)),
+                true, 512, JSON_THROW_ON_ERROR
+            )[$request->offer_utxo];
+
+            // Parse required inline datum values
+            $inlineDatum = $offerUTXOData['inlineDatum'];
+            $inlineDatum['constructor'] = 2;
+            $poName = $inlineDatum['fields'][0]['fields'][3]['bytes'];
+            $printerOperatorPKH = $inlineDatum['fields'][0]['fields'][4]['bytes'];
+            $printerOperatorStakeKey = $inlineDatum['fields'][0]['fields'][5]['bytes'];
+            $printerOperatorAddress = $this->buildAddress($printerOperatorPKH, $printerOperatorStakeKey);
+            $offerMinUTXO = (int) $offerUTXOData['value']['lovelace'];
+
+            // Generate post offer information datum
+            file_put_contents(
+                sprintf('%s/post_offer_information_datum.json', $tempDir),
+                json_encode($inlineDatum, JSON_THROW_ON_ERROR),
+            );
+
+            // Generate make offer redeemer
+            [$poUTXOTx, $poUTXOIx] = explode('#', $request->po_utxo);
+            file_put_contents(
+                "$tempDir/make_offer_redeemer.json",
+                json_encode([
+                    'constructor' => 2,
+                    'fields' => [[
+                        'constructor' => 0,
+                        'fields' => [
+                            [ 'int' => $inlineDatum['fields'][0]['fields'][6]['int'] ],
+                            [ 'bytes' => $poUTXOTx ],
+                            [ 'int' => (int) $poUTXOIx ],
+                        ],
+                    ]],
+                ], JSON_THROW_ON_ERROR),
+            );
+
+            // Generate accept offer redeemer
+            [$offerUTXOTx, $offerUTXOIx] = explode('#', $request->offer_utxo);
+            file_put_contents(
+                "$tempDir/accept_offer_redeemer.json",
+                json_encode([
+                    'constructor' => 2,
+                    'fields' => [[
+                        'constructor' => 0,
+                        'fields' => [
+                            [ 'int' => $inlineDatum['fields'][0]['fields'][6]['int'] ],
+                            [ 'bytes' => $offerUTXOTx ],
+                            [ 'int' => (int) $offerUTXOIx ],
+                        ],
+                    ]],
+                ], JSON_THROW_ON_ERROR),
+            );
+
+            // Generate po nft output
+            $poNFTNameOutput = sprintf(
+                '1 %s.%s',
+
+                env('PURCHASE_ORDER_POLICY_ID'),
+                $poName,
+            );
+            $poPrintingPoolOutput = sprintf(
+                '%s + %d + %s',
+
+                env('PRINTING_POOL_CONTRACT_SCRIPT_ADDRESS'),
+                ($poMinUTXO + (int) $inlineDatum['fields'][0]['fields'][6]['int']),
+                $poNFTNameOutput,
+            );
+
+            // Generate refund offer minutxo
+            $offerRefundOutput = sprintf(
+                '%s + %d',
+
+                $printerOperatorAddress,
+                $offerMinUTXO,
+            );
+
+            // Generate input transaction ids
+            $txIns = '';
+            foreach ($request->customer_input_tx_ids as $txId) {
+                $txIns .= '--tx-in ' . $txId . ' \\' . PHP_EOL;
+            }
+
+            // Build accept offer command
+            $acceptOfferCommand = sprintf(
+                '%s transaction build \\' . PHP_EOL .
+                '%s \\' . PHP_EOL .
+                '--protocol-params-file %s/protocol.json \\' . PHP_EOL .
+                '--out-file %s/tx.draft \\' . PHP_EOL .
+                '--change-address %s \\' . PHP_EOL .
+                '%s' .
+                '--tx-in-collateral %s \\' . PHP_EOL .
+                '--tx-in %s \\' . PHP_EOL .
+                '--spending-tx-in-reference="%s" \\' . PHP_EOL .
+                '--spending-plutus-script-v2 \\' . PHP_EOL .
+                '--spending-reference-tx-in-inline-datum-present \\' . PHP_EOL .
+                '--spending-reference-tx-in-redeemer-file %s/accept_offer_redeemer.json \\' . PHP_EOL .
+                '--tx-in %s \\' . PHP_EOL .
+                '--spending-tx-in-reference="%s" \\' . PHP_EOL .
+                '--spending-plutus-script-v2 \\' . PHP_EOL .
+                '--spending-reference-tx-in-inline-datum-present \\' . PHP_EOL .
+                '--spending-reference-tx-in-redeemer-file %s/make_offer_redeemer.json \\' . PHP_EOL .
+                '--tx-out="%s" \\' . PHP_EOL .
+                '--tx-out-inline-datum-file %s/post_offer_information_datum.json \\' . PHP_EOL .
+                '--tx-out="%s" \\' . PHP_EOL .
+                '--required-signer-hash %s \\' . PHP_EOL .
+                '%s',
+
+                CARDANO_CLI,
+                NETWORK_ERA,
+                $tempDir,
+                $tempDir,
+                $request->customer_change_address,
+                $txIns,
+                $request->customer_collateral,
+                $request->po_utxo,
+                env('PRINTING_POOL_LOCKING_REFERENCE_TX_ID'),
+                $tempDir,
+                $request->offer_utxo,
+                env('PRINTING_POOL_LOCKING_REFERENCE_TX_ID'),
+                $tempDir,
+                $poPrintingPoolOutput,
+                $tempDir,
+                $offerRefundOutput,
+                $request->customer_pkh,
+                cardanoNetworkFlag(),
+            );
+            shellExec($acceptOfferCommand, __FUNCTION__, __FILE__, __LINE__);
+
+            // Read the draft tx
+            $draftTx = json_decode(file_get_contents(sprintf(
+                "%s/tx.draft",
+                $tempDir,
+            )), true, 512, JSON_THROW_ON_ERROR);
+
+            // Success
+            return $this->successResponse([
+                'transaction' => $draftTx['cborHex'],
+            ]);
+
+        } catch (Throwable $exception) {
 
             return $this->jsonException($exception);
 

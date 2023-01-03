@@ -151,10 +151,10 @@ class PrinterOperatorController extends Controller
             exportProtocolParams($tempDir);
 
             // Export po utxo data
-            $exportPOUTXOCommand = sprintf(
+            $exportOfferUTXOCommand = sprintf(
                 '%s query utxo \\' . PHP_EOL .
                 '--tx-in %s \\' . PHP_EOL .
-                '--out-file %s/po.utxo \\' . PHP_EOL .
+                '--out-file %s/offer.utxo \\' . PHP_EOL .
                 '%s',
 
                 CARDANO_CLI,
@@ -162,18 +162,18 @@ class PrinterOperatorController extends Controller
                 $tempDir,
                 cardanoNetworkFlag(),
             );
-            shellExec($exportPOUTXOCommand, __FUNCTION__, __FILE__, __LINE__);
-            $poUTXOData = json_decode(
-                file_get_contents(sprintf('%s/po.utxo', $tempDir)),
+            shellExec($exportOfferUTXOCommand, __FUNCTION__, __FILE__, __LINE__);
+            $offerUTXOData = json_decode(
+                file_get_contents(sprintf('%s/offer.utxo', $tempDir)),
                 true, 512, JSON_THROW_ON_ERROR
             )[$request->offer_utxo];
 
             // Parse required inline datum values
-            $inlineDatum = $poUTXOData['inlineDatum'];
+            $inlineDatum = $offerUTXOData['inlineDatum'];
             $printerOperatorPKH = $inlineDatum['fields'][0]['fields'][4]['bytes'];
             $printerOperatorStakeKey = $inlineDatum['fields'][0]['fields'][5]['bytes'];
             $printerOperatorAddress = $this->buildAddress($printerOperatorPKH, $printerOperatorStakeKey);
-            $offerMinUTXO = (int) $poUTXOData['value']['lovelace'];
+            $offerMinUTXO = (int) $offerUTXOData['value']['lovelace'];
 
             // Generate remove redeemer
             file_put_contents(
