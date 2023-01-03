@@ -72,13 +72,58 @@ class PrinterOperatorController extends Controller
                 true, 512, JSON_THROW_ON_ERROR
             )[$poUTXO];
 
-            // Parse required inline datum values
-            $inlineDatum = $poUTXOData['inlineDatum'];
-            $customerPKH = $inlineDatum['fields'][0]['fields'][0]['bytes'];
-            $customerStakeKey = $inlineDatum['fields'][0]['fields'][1]['bytes'];
-            $customerAddress = $this->buildAddress($customerPKH, $customerStakeKey);
-            $poMinUTXO = (int) $poUTXOData['value']['lovelace'];
+            // Generate input transaction ids
+            $txIns = '';
+            foreach ($request->printer_operator_input_tx_ids as $txId) {
+                $txIns .= '--tx-in ' . $txId . ' \\' . PHP_EOL;
+            }
 
+            // Generate make offer information datum
+            $inlineDatum = $poUTXOData['inlineDatum'];
+            $inlineDatum['constructor'] = 1;
+            $inlineDatum['fields'][0]['fields'][4]['bytes'] = $request->printer_operator_pkh;
+            $inlineDatum['fields'][0]['fields'][5]['bytes'] = $request->printer_operator_stake_key;
+            $inlineDatum['fields'][0]['fields'][6]['int'] = $request->offer_amount;
+            $inlineDatum['fields'][0]['fields'][7]['int'] = strtotime($request->delivery_date) * 1000;
+            file_put_contents(
+                "$tempDir/make_offer_information_datum.json",
+                json_encode($inlineDatum, JSON_THROW_ON_ERROR),
+            );
+
+            // Build make offer command
+            $makeOfferCommand = sprintf(
+                '%s transaction build \\' . PHP_EOL .
+                '%s \\' . PHP_EOL .
+                '--protocol-params-file %s/protocol.json \\' . PHP_EOL .
+                '--out-file %s/tx.draft \\' . PHP_EOL .
+                '--change-address %s \\' . PHP_EOL .
+                '%s' .
+                '--tx-out="%s + 2000000" \\' . PHP_EOL .
+                '--tx-out-inline-datum-file %s/make_offer_information_datum.json \\' . PHP_EOL .
+                '%s',
+
+                CARDANO_CLI,
+                NETWORK_ERA,
+                $tempDir,
+                $tempDir,
+                $request->printer_operator_change_address,
+                $txIns,
+                env('PRINTING_POOL_CONTRACT_SCRIPT_ADDRESS'),
+                $tempDir,
+                cardanoNetworkFlag(),
+            );
+            shellExec($makeOfferCommand, __FUNCTION__, __FILE__, __LINE__);
+
+            // Read the draft tx
+            $draftTx = json_decode(file_get_contents(sprintf(
+                "%s/tx.draft",
+                $tempDir,
+            )), true, 512, JSON_THROW_ON_ERROR);
+
+            // Success
+            return $this->successResponse([
+                'transaction' => $draftTx['cborHex'],
+            ]);
 
         } catch (Throwable $exception) {
 

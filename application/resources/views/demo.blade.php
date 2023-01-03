@@ -200,9 +200,10 @@
                             <div id="offerADAAmountHelp" class="form-text">How much would you charge in ₳DA to print this?</div>
                         </div>
                         <div class="mb-3">
-                            <textarea rows="3" id="offer_signature" class="form-control form-control-sm" placeholder="Printer Operator Offer Signature will appear here ..." disabled aria-label=""></textarea>
+                            <label for="offer_delivery_date" class="form-label"><strong>Estimated Delivery Date</strong></label>
+                            <input id="offer_delivery_date" name="offer_delivery_date" aria-describedby="deliveryDateHelp" type="date" placeholder="yyyy-mm-dd" min="2023-01-01" max="2024-01-01" class="form-control form-control-sm" required>
+                            <div id="deliveryDateHelp" class="form-text">How much would you charge in ₳DA to print this?</div>
                         </div>
-
                         <button type="submit" class="btn offer-button btn-primary">
                             Printer Operator: <strong>Make an Offer</strong>
                         </button>
@@ -992,16 +993,95 @@
                         $('button.offer-button').addClass('disabled');
 
                         const walletBasePKH = await window.connectedWallet.getChangeAddress();
-                        const customerPKH = walletBasePKH.slice(2, 58);
-                        const customerStakeKey = walletBasePKH.slice(58);
-                        const customerChangeAddress = CSL.Address.from_bytes(Uint8Array.from(fromHex(walletBasePKH))).to_bech32(
+                        const printerOperatorPKH = walletBasePKH.slice(2, 58);
+                        const printerOperatorStakeKey = walletBasePKH.slice(58);
+                        const printerOperatorChangeAddress = CSL.Address.from_bytes(Uint8Array.from(fromHex(walletBasePKH))).to_bech32(
                             'addr' + (networkMode === 0 ? '_test' : ''),
                         );
 
+                        const getCollateral = window.connectedWallet.experimental.getCollateral || window.connectedWallet.getCollateral;
+                        const collateralCBOR = await getCollateral();
+                        if (collateralCBOR.length === 0) {
+                            showToast('error', `Please configure <strong>Collateral</strong> in your wallet`);
+                            return;
+                        }
+                        const collateralUtxo = utxoCborToJSON(collateralCBOR[0]);
+                        const printerOperatorCollateral = `${ collateralUtxo.txId }#${ collateralUtxo.index }`;
+
+                        const fundedUtxos = getFundedUtxos(getAllInputs(await window.connectedWallet.getUtxos()), printerOperatorCollateral);
+                        if (fundedUtxos.length === 0) {
+                            showToast('error', 'Pure ada only utxo inputs exhausted, send 5 ada to yourself and try again');
+                            return;
+                        }
+
                         const poName = $('input#offer_po_name').val();
                         const offerAmount = parseInt($('input#offer_ada_amount').val()) * 1000000;
+                        const deliveryDate = $('input#offer_delivery_date').val();
 
-                        // TODO rest
+                        const offerRequest = {
+                            po_name: poName,
+                            offer_amount: offerAmount,
+                            delivery_date: deliveryDate,
+                            printer_operator_pkh: printerOperatorPKH,
+                            printer_operator_stake_key: printerOperatorStakeKey,
+                            printer_operator_change_address: printerOperatorChangeAddress,
+                            printer_operator_input_tx_ids: fundedUtxos,
+                        };
+
+                        const settings = {
+                            "url": "/printer-operator/purchase-order/make-offer",
+                            "method": "POST",
+                            "timeout": 0,
+                            "headers": {
+                                "Content-Type": "application/json"
+                            },
+                            "data": JSON.stringify(offerRequest),
+                        };
+
+                        $.ajax(settings).done(async function (response) {
+                            if (response.data) {
+
+                                const tx = CSL.Transaction.from_bytes(fromHex(response.data.transaction));
+                                const txWitness = tx.witness_set();
+                                const txMetadata = tx.auxiliary_data();
+
+                                const txVkeyWitnesses = await window.connectedWallet.signTx(response.data.transaction, true);
+                                const witnesses = CSL.TransactionWitnessSet.from_bytes(fromHex(txVkeyWitnesses));
+
+                                const transactionWitnessSet = CSL.TransactionWitnessSet.new();
+                                transactionWitnessSet.set_vkeys(witnesses.vkeys());
+                                // TODO: Notice me senpai this needs to be in the global tx handler
+                                // TODO: not everything will have redeemers for e.g.
+                                if (txWitness.redeemers() !== undefined) {
+                                    transactionWitnessSet.set_redeemers(txWitness.redeemers());
+                                }
+
+                                const signedTx = CSL.Transaction.new(
+                                    tx.body(),
+                                    transactionWitnessSet,
+                                    txMetadata,
+                                );
+
+                                let singedTxCBOR = toHex(signedTx.to_bytes()).toLowerCase();
+                                if (singedTxCBOR.indexOf('d90103a100') === -1) {
+                                    singedTxCBOR = singedTxCBOR.replace('a11902d1', 'd90103a100a11902d1');
+                                }
+
+                                await window.connectedWallet.submitTx(singedTxCBOR);
+
+                                // TODO: To calculate the real tx id, see: https://ddzgroup.slack.com/archives/D0494H6NT40/p1670462391398179
+                                // TODO: Use the Constants to re-create signed tx file
+                                showToast('success', `Transaction was <strong>success</strong>`);
+
+                            } else {
+
+                                showToast('error', response.error.message || response.error);
+
+                            }
+                        }).catch(err => {
+                            showToast('error', 'Something went wrong, check developer console');
+                            console.log(err);
+                        });
 
                     });
                 });
