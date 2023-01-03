@@ -176,6 +176,18 @@ class CustomerController extends Controller
                 $designerPaymentOut = '\\' . PHP_EOL;
             }
 
+            // TODO: Load this from db for the original design
+            // Generate metadata json
+            file_put_contents(
+                "$tempDir/metadata.json",
+                json_encode((object) [
+                    DESIGN_METADATA_INDEX => (object) [
+                        'name' => 'Space Rocket',
+                        'image' => 'ipfs://QmQWG57Vpq2pPfuzBn2bS8UEj4M1GnCa5PpqSU6k5fyNQC',
+                    ]
+                ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
+            );
+
             // Build print command
             $printPOCommand = sprintf(
                 '%s transaction build \\' . PHP_EOL .
@@ -200,6 +212,7 @@ class CustomerController extends Controller
                 '--mint-plutus-script-v2 \\' . PHP_EOL .
                 '--policy-id="%s" \\' . PHP_EOL .
                 '--mint-reference-tx-in-redeemer-file %s/mint_redeemer.json \\' . PHP_EOL .
+                '--metadata-json-file %s/metadata.json \\' . PHP_EOL .
                 '%s',
 
                 CARDANO_CLI,
@@ -220,6 +233,7 @@ class CustomerController extends Controller
                 $poNFTNameOutput,
                 env('MARKETPLACE_MINTING_REFERENCE_TX_ID'),
                 env('PURCHASE_ORDER_POLICY_ID'),
+                $tempDir,
                 $tempDir,
                 cardanoNetworkFlag(),
             );
@@ -243,7 +257,7 @@ class CustomerController extends Controller
         } finally {
 
             if ($tempDir) {
-                rrmdir($tempDir);
+                //rrmdir($tempDir);
             }
 
         }

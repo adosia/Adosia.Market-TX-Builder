@@ -140,7 +140,7 @@
 
             <div class="card mb-3">
                 <div class="card-body">
-                    <h4 class="mb-3">4. [ Customer ] Print Design Demo</h4>
+                    <h4 class="mb-3">4. [ Customer ] Print Purchase Order from Design Demo</h4>
                     <form id="print-form">
                         <div class="mb-3">
                             <label for="print_design_name" class="form-label"><strong>Adosia Design Name</strong></label>
