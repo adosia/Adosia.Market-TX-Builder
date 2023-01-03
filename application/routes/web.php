@@ -22,6 +22,7 @@ $router->group(['prefix' => 'customer'], function() use($router) {
     $router->post('purchase-order/remove', 'CustomerController@purchaseOrderRemove');
     $router->post('purchase-order/add', 'CustomerController@purchaseOrderAdd');
     $router->post('purchase-order/accept-offer', 'CustomerController@purchaseOrderAcceptOffer');
+    $router->post('purchase-order/accept-shipment', 'CustomerController@purchaseOrderAcceptShipment');
 });
 
 /** @var Router $router */
