@@ -6,7 +6,6 @@
     <meta name="description" content="">
     <meta name="author" content="Latheesan Kanesamoorthy">
     <title>TX Builder Demo</title>
-    <link rel="canonical" href="https://getbootstrap.com/docs/5.2/examples/sign-in/">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.2.2/css/bootstrap.min.css" integrity="sha512-CpIKUSyh9QX2+zSdfGP+eWLx23C8Dj9/XmHjZY2uDtfkdLGo0uY12jgcnkX9vXOgYajEKb/jiw67EYm+kBf+6g==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/11.6.2/sweetalert2.min.css" integrity="sha512-5aabpGaXyIfdaHgByM7ZCtgSoqg51OAt8XWR2FHr/wZpTCea7ByokXbMX2WSvosioKvCfAGDQLlGDzuU6Nm37Q==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 </head>
@@ -286,7 +285,7 @@
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@stricahq/cbors@1.0.2/dist/index.min.js"></script>
     <script type="text/javascript" src="https://cdn.dripdropz.io/wallet-connector/csl-v10.0.4/bundle.js"></script>
     <script type="module">
-        import { C as CSL } from 'https://unpkg.com/lucid-cardano@0.7.9/web/mod.js';
+        import { C as CSL } from 'https://cdn.jsdelivr.net/npm/lucid-cardano@0.8.8/web/mod.js';
         (async function ($) {
 
             const networkMode = {{ isTestnet() ? 0 : 1 }};
