@@ -220,6 +220,7 @@ class DesignerController extends Controller
             // Success
             return $this->successResponse([
                 'transaction' => $draftTx['cborHex'],
+                'design_name' => env('DESIGN_PREFIX') . $currentDesignNumber,
             ]);
 
         } catch (Throwable $exception) {
