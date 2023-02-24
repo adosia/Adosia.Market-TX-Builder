@@ -190,8 +190,8 @@
                     <h4 class="mb-3">7. [ Printer Operator ] Make an Offer Demo</h4>
                     <form id="offer-form">
                         <div class="mb-3">
-                            <label for="offer_po_name" class="form-label"><strong>Adosia Design Purchase Order Name</strong></label>
-                            <input id="offer_po_name" name="offer_po_name" maxlength="64" placeholder="e.g. Adosia_Designs_33_2" type="text" class="form-control form-control-sm" required>
+                            <label for="offer_po_utxo" class="form-label"><strong>PO UTXO</strong></label>
+                            <input id="offer_po_utxo" name="offer_po_utxo" placeholder="e.g. f503ee522a0844b9b46fc087de3601a43c4b9d45c96a79fb01142e69048fd496#1" type="text" class="form-control form-control-sm" required>
                         </div>
                         <div class="mb-3">
                             <label for="offer_ada_amount" class="form-label"><strong>Offer Amount in ₳DA</strong></label>
@@ -1077,12 +1077,12 @@
                             return;
                         }
 
-                        const poName = $('input#offer_po_name').val();
+                        const poUTXO = $('input#offer_po_utxo').val();
                         const offerAmount = parseInt($('input#offer_ada_amount').val()) * 1000000;
                         const deliveryDate = $('input#offer_delivery_date').val();
 
                         const offerRequest = {
-                            po_name: poName,
+                            po_utxo: poUTXO,
                             offer_amount: offerAmount,
                             delivery_date: deliveryDate,
                             printer_operator_pkh: printerOperatorPKH,

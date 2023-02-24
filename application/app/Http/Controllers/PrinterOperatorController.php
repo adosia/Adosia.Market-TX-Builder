@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use Throwable;
-use RuntimeException;
 use Illuminate\Http\Request;
 use App\Exceptions\AppException;
 use Illuminate\Http\JsonResponse;
@@ -26,34 +25,6 @@ class PrinterOperatorController extends Controller
             // Export protocol parameters
             exportProtocolParams($tempDir);
 
-            // Find the purchase order utxo
-            /**
-             * NOTES: Blockfrost does not return the correct index on the first api call,
-             * so we have to make 2 redundant api calls to get the txIndex
-             */
-            $assetId = env('PURCHASE_ORDER_POLICY_ID') . bin2hex($request->po_name);
-            $assetTransactions = $this->callBlockFrost("assets/$assetId/transactions?count=1&page=1&order=desc");
-            if (!count($assetTransactions)) {
-                throw new RuntimeException('Failed to load asset transactions');
-            }
-            $txId = $assetTransactions[0]['tx_hash'];
-            $assetTransactionUTXOs = $this->callBlockFrost("txs/$txId/utxos");
-            $txIndex = null;
-            foreach ($assetTransactionUTXOs['outputs'] as $output) {
-                foreach ($output['amount'] as $amount) {
-                    if ($amount['unit'] === $assetId) {
-                        $txIndex = $output['output_index'];
-                    }
-                }
-                if (!is_null($txIndex)) {
-                    break;
-                }
-            }
-            if (is_null($txIndex)) {
-                throw new RuntimeException('Failed to locate asset in smart contract');
-            }
-            $poUTXO = "$txId#$txIndex";
-
             // Export po utxo data
             $exportPOUTXOCommand = sprintf(
                 '%s query utxo \\' . PHP_EOL .
@@ -62,7 +33,7 @@ class PrinterOperatorController extends Controller
                 '%s',
 
                 CARDANO_CLI,
-                $poUTXO,
+                $request->po_utxo,
                 $tempDir,
                 cardanoNetworkFlag(),
             );
@@ -70,7 +41,7 @@ class PrinterOperatorController extends Controller
             $poUTXOData = json_decode(
                 file_get_contents(sprintf('%s/po.utxo', $tempDir)),
                 true, 512, JSON_THROW_ON_ERROR
-            )[$poUTXO];
+            )[$request->po_utxo];
 
             // Generate input transaction ids
             $txIns = '';
