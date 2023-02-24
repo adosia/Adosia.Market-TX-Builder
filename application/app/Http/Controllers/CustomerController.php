@@ -248,6 +248,7 @@ class CustomerController extends Controller
             // Success
             return $this->successResponse([
                 'transaction' => $draftTx['cborHex'],
+                'purchase_order_name' => $poMintName,
             ]);
 
         } catch (Throwable $exception) {
