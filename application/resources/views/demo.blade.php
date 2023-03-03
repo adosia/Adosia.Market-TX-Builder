@@ -253,7 +253,7 @@
                             <input id="shipped_po_utxo" name="shipped_po_utxo" placeholder="e.g. 66747a201f6de0b4a9afc9acb1f6e46b7aea0c27e9f494fb5de2e05a526b62f8#0" type="text" class="form-control form-control-sm" required>
                         </div>
                         <button type="submit" class="btn set-shipped-button btn-primary">
-                            Printer Operator: <strong>Accept an Offer</strong>
+                            Printer Operator: <strong>Set as Shipped</strong>
                         </button>
                     </form>
                 </div>
