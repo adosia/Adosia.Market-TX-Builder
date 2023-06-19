@@ -343,7 +343,7 @@ class PrinterOperatorController extends Controller
                 $tempDir,
                 $poPrintingPoolOutput,
                 $tempDir,
-                $request->printer_operator_pkh,
+                $printerOperatorPKH,
                 cardanoNetworkFlag(),
             );
             shellExec($setShippedCommand, __FUNCTION__, __FILE__, __LINE__);

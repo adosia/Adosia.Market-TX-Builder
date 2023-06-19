@@ -600,6 +600,9 @@ class CustomerController extends Controller
             // Parse the po min utxo
             $poMinUTXO = (int) $poUTXOData['value']['lovelace'];
 
+            // Parse the required signer from inline datum
+            $poRequiredSigner = $poUTXOData['inlineDatum']['fields'][0]['fields'][0]['bytes'];
+
             // Export offer utxo data
             $exportOfferUTXOCommand = sprintf(
                 '%s query utxo \\' . PHP_EOL .
@@ -737,7 +740,7 @@ class CustomerController extends Controller
                 $poPrintingPoolOutput,
                 $tempDir,
                 $offerRefundOutput,
-                $request->customer_pkh,
+                $poRequiredSigner,
                 cardanoNetworkFlag(),
             );
             shellExec($acceptOfferCommand, __FUNCTION__, __FILE__, __LINE__);
@@ -877,7 +880,7 @@ class CustomerController extends Controller
                 $tempDir,
                 $poCustomerOutput,
                 $printerOperatorOutput,
-                $request->customer_pkh,
+                $customerPKH,
                 cardanoNetworkFlag(),
             );
             shellExec($acceptShipmentCommand, __FUNCTION__, __FILE__, __LINE__);
